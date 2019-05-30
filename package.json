@@ -25,9 +25,7 @@
   },
   "homepage": "https://github.com/mattbishop/sql-event-store#readme",
   "dependencies": {
-    "sql.js": "^1.0.0"
-  },
-  "devDependencies": {
+    "sql.js": "^1.0.0",
     "tape": "^4.10.2",
     "uuid": "^3.3.2"
   }
