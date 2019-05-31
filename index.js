@@ -12,6 +12,9 @@ It also tests the schema with incorrect data, duplicate data and other likely re
 
  I can't do this in CHECK, I have to write a BEFORE trigger to test the data
 
+TODO: block insertion of ts, sequence
+TODO: disable DELETE and UPDATE
+todo: first event for an entity key must 'previous = 0000...'
  */
 
 const test = require('tape');
@@ -43,65 +46,102 @@ function shutdownDb(db) {
 test('setup', async setup => {
   const db = await initDb();
 
-  setup.test('insert events', t => {
+  setup.test('insert entity_events', t => {
+
+    const stmt = db.prepare('INSERT INTO entity_events (entity, event) values (?, ?)');
+
+    t.test('cannot insert null fields', assert => {
+      assert.throws(
+        () => stmt.run([null, thingCreatedEvent]),
+        /Error: NOT NULL constraint failed: entity_events\.entity/,
+        'cannot insert null entity');
+      assert.throws(
+        () => stmt.run([thingEntity, null]),
+        /Error: NOT NULL constraint failed: entity_events\.event/,
+        'cannot insert null entity');
+      assert.end();
+    });
 
     t.test('insert entity_events', assert => {
-      assert.doesNotThrow(() => db.run(`INSERT INTO entity_events (entity, event) values ('${thingEntity}', '${thingCreatedEvent}')`));
-      assert.doesNotThrow(() => db.run(`INSERT INTO entity_events (entity, event) values ('${thingEntity}', '${thingDeletedEvent}')`));
+      assert.doesNotThrow(() => stmt.run([thingEntity, thingCreatedEvent]));
+      assert.doesNotThrow(() => stmt.run([thingEntity, thingDeletedEvent]));
       assert.end();
     });
 
     t.test('cannot insert duplicate entity events', assert => {
       assert.throws(
-          () => db.run(`INSERT INTO entity_events (entity, event) values ('${thingEntity}', '${thingDeletedEvent}')`),
-          /UNIQUE constraint failed: entity_events\.entity, entity_events\.event/,
-          'cannot duplicate entity events');
+        () => stmt.run([thingEntity, thingCreatedEvent]),
+        /UNIQUE constraint failed: entity_events\.entity, entity_events\.event/,
+        'cannot duplicate entity events');
       assert.end();
     });
+  });
 
-    const insertStmt = db.prepare('INSERT INTO events(entity, event, key, id, data, command, previous) VALUES (?, ?, ?, ?, ?, ?, ?)');
+  setup.test('insert events', t => {
+    const stmt = db.prepare('INSERT INTO events(entity, event, key, id, data, command, previous) VALUES (?, ?, ?, ?, ?, ?, ?)');
     const thing1 = '1';
+    const thing2 = '2';
     const command1 = uuid();
+    const command2 = uuid();
     const event1 = uuid();
+    const event2 = uuid();
     const data = '{}';
 
     t.test('cannot insert empty columns', assert => {
-        assert.throws(
-            () => insertStmt.run([null, thingCreatedEvent, thing1, event1, data, command1, firstId]),
-            /Error: NOT NULL constraint failed: events\.entity/,
-                'cannot insert null entity');
-        assert.throws(
-            () => insertStmt.run([thingEntity, null, thing1, event1, data, command1, firstId]),
-            /Error: NOT NULL constraint failed: events\.event/,
-            'cannot insert null event');
-        assert.throws(
-            () => insertStmt.run([thingEntity, thingCreatedEvent, null, event1, data, command1, firstId]),
-            /Error: NOT NULL constraint failed: events\.key/,
-            'cannot insert null entity key');
-        assert.throws(
-            () => insertStmt.run([thingEntity, thingCreatedEvent, thing1, null, data, command1, firstId]),
-            /Error: NOT NULL constraint failed: events\.id/,
-            'cannot insert null event id');
-        assert.throws(
-            () => insertStmt.run([thingEntity, thingCreatedEvent, thing1, event1, null, command1, firstId]),
-            /Error: NOT NULL constraint failed: events\.data/,
-            'cannot insert null event data');
-        assert.throws(
-            () => insertStmt.run([thingEntity, thingCreatedEvent, thing1, event1, data, null, firstId]),
-            /Error: NOT NULL constraint failed: events\.command/,
-            'cannot insert null command');
-        assert.throws(
-            () => insertStmt.run([thingEntity, thingCreatedEvent, thing1, event1, data, command1, null]),
-            /Error: NOT NULL constraint failed: events\.previous/,
-            'cannot insert null previous');
-        assert.end();
+      assert.throws(
+        () => stmt.run([null, thingCreatedEvent, thing1, event1, data, command1, firstId]),
+        /NOT NULL constraint failed: events\.entity/,
+        'cannot insert null entity');
+      assert.throws(
+        () => stmt.run([thingEntity, null, thing1, event1, data, command1, firstId]),
+        /NOT NULL constraint failed: events\.event/,
+        'cannot insert null event');
+      assert.throws(
+        () => stmt.run([thingEntity, thingCreatedEvent, null, event1, data, command1, firstId]),
+        /NOT NULL constraint failed: events\.key/,
+        'cannot insert null entity key');
+      assert.throws(
+        () => stmt.run([thingEntity, thingCreatedEvent, thing1, null, data, command1, firstId]),
+        /NOT NULL constraint failed: events\.id/,
+        'cannot insert null event id');
+      assert.throws(
+        () => stmt.run([thingEntity, thingCreatedEvent, thing1, event1, null, command1, firstId]),
+        /NOT NULL constraint failed: events\.data/,
+        'cannot insert null event data');
+      assert.throws(
+        () => stmt.run([thingEntity, thingCreatedEvent, thing1, event1, data, null, firstId]),
+        /NOT NULL constraint failed: events\.command/,
+        'cannot insert null command');
+      assert.throws(
+        () => stmt.run([thingEntity, thingCreatedEvent, thing1, event1, data, command1, null]),
+        /NOT NULL constraint failed: events\.previous/,
+        'cannot insert null previous');
+      assert.end();
     });
 
     t.test('insert first event for an entity', assert => {
-      assert.doesNotThrow(() => insertStmt.run([thingEntity, thingCreatedEvent, thing1, event1, '{}', command1, firstId]));
+      assert.doesNotThrow(() => stmt.run([thingEntity, thingCreatedEvent, thing1, event1, data, command1, firstId]));
       assert.end();
     });
-    t.test('')
+    t.test('Cannot insert duplicates', assert => {
+      assert.throws(
+        () => stmt.run([thingEntity, thingCreatedEvent, thing1, event1, data, command1, firstId]),
+        /UNIQUE constraint failed/,
+        'cannot insert complete duplicate event');
+      assert.throws(
+        () => stmt.run([thingEntity, thingDeletedEvent, thing1, event1, data, command2, event2]),
+        /UNIQUE constraint failed: events\.id/,
+        'cannot insert different event for same id');
+      assert.throws(
+        () => stmt.run([thingEntity, thingDeletedEvent, thing1, event2, data, command1, event1]),
+        /UNIQUE constraint failed: events\.command/,
+        'cannot insert different event for same command');
+      assert.throws(
+        () => stmt.run([thingEntity, thingDeletedEvent, thing1, event2, data, command2, firstId]),
+        /UNIQUE constraint failed: events\.previous/,
+        'cannot insert different event for same previous');
+      assert.end();
+    });
   });
 
   test.onFinish(() => shutdownDb(db));

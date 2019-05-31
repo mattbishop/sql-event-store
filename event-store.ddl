@@ -5,8 +5,8 @@ DROP TABLE IF EXISTS entity_events;
 DROP TABLE IF EXISTS events;
 
 CREATE TABLE entity_events(
-    entity	 TEXT NOT NULL,
-    event	 TEXT NOT NULL,
+    entity  TEXT NOT NULL,
+    event   TEXT NOT NULL,
     PRIMARY KEY (entity, event)
 );
 
