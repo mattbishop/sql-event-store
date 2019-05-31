@@ -22,6 +22,7 @@ const uuid = require('uuid/v4');
 const thingEntity = 'thing';
 const thingCreatedEvent = 'thing-created';
 const thingDeletedEvent = 'thing-deleted';
+const firstId = '00000000-0000-0000-0000-000000000000';
 
 async function initDb() {
   const SQL = await initSqlJs();
@@ -48,8 +49,16 @@ test('setup', async setup => {
       assert.end();
     });
     t.test('cannot insert duplicate entity events', assert => {
-      assert.throws(() => db.run(`INSERT INTO entity_events (entity, event) values ('${thingEntity}', '${thingDeletedEvent}')`,
+      assert.throws(
+          () => db.run(`INSERT INTO entity_events (entity, event) values ('${thingEntity}', '${thingDeletedEvent}')`,
           'UNIQUE constraint failed: entity_events.entity, entity_events.event'));
+      assert.end();
+    });
+
+    const insertStmt = db.prepare('INSERT INTO events(entity, event, key, id, data, command, previous) VALUES (?, ?, ?, ?, ?, ?, ?);');
+
+    t.test('insert first event for an entity', assert => {
+      assert.doesNotThrow(() => insertStmt.run([thingEntity, thingCreatedEvent, '1', uuid(), '{}', uuid(), firstId]));
       assert.end();
     });
   });
