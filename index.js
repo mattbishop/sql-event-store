@@ -22,10 +22,14 @@ const fs = require('fs');
 const initSqlJs = require('sql.js');
 const uuid = require('uuid/v4');
 
+const firstId = '00000000-0000-0000-0000-000000000000';
+
 const thingEntity = 'thing';
 const thingCreatedEvent = 'thing-created';
 const thingDeletedEvent = 'thing-deleted';
-const firstId = '00000000-0000-0000-0000-000000000000';
+const tableTennisEntity = 'table-tennis';
+const pingEvent = 'ball-pinged';
+const pongEvent = 'ball-ponged';
 
 async function initDb() {
   const SQL = await initSqlJs();
@@ -65,6 +69,8 @@ test('setup', async setup => {
     t.test('insert entity_events', assert => {
       assert.doesNotThrow(() => stmt.run([thingEntity, thingCreatedEvent]));
       assert.doesNotThrow(() => stmt.run([thingEntity, thingDeletedEvent]));
+      assert.doesNotThrow(() => stmt.run([tableTennisEntity, pingEvent]));
+      assert.doesNotThrow(() => stmt.run([tableTennisEntity, pongEvent]));
       assert.end();
     });
 
@@ -80,7 +86,6 @@ test('setup', async setup => {
   setup.test('insert events', t => {
     const stmt = db.prepare('INSERT INTO events(entity, event, key, id, data, command, previous) VALUES (?, ?, ?, ?, ?, ?, ?)');
     const thing1 = '1';
-    const thing2 = '2';
     const command1 = uuid();
     const command2 = uuid();
     const event1 = uuid();
@@ -119,10 +124,19 @@ test('setup', async setup => {
       assert.end();
     });
 
+    t.test('Cannot insert event from wrong entity', assert => {
+      assert.throws(
+        () => stmt.run([tableTennisEntity, thingCreatedEvent, thing1, event1, data, command1, firstId]),
+        /FOREIGN KEY constraint failed/,
+        'cannot insert event in wrong entity');
+      assert.end();
+    });
+
     t.test('insert first event for an entity', assert => {
       assert.doesNotThrow(() => stmt.run([thingEntity, thingCreatedEvent, thing1, event1, data, command1, firstId]));
       assert.end();
     });
+
     t.test('Cannot insert duplicates', assert => {
       assert.throws(
         () => stmt.run([thingEntity, thingCreatedEvent, thing1, event1, data, command1, firstId]),
