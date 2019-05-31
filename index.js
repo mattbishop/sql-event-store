@@ -17,6 +17,9 @@ const fs = require('fs');
 const initSqlJs = require('sql.js');
 const uuid = require('uuid/v4');
 
+const thingEntity = 'thing';
+const thingCreatedEvent = 'thing-created';
+const thingDeletedEvent = 'thing-deleted';
 
 async function initDb() {
   const SQL = await initSqlJs();
@@ -37,10 +40,15 @@ function shutdownDb(db) {
 // use t.plan() for async testing too.
 test('setup', async setup => {
   const db = await initDb();
-
   setup.test('insert events', t => {
-    t.test('insert first event for an entity', assert => {
-      assert.equal(2 + 2, 4, '2 + 2 = 4');
+    t.test('insert entity_events', assert => {
+      db.run(`INSERT INTO entity_events (entity, event) values ('${thingEntity}', '${thingCreatedEvent}')`);
+      db.run(`INSERT INTO entity_events (entity, event) values ('${thingEntity}', '${thingDeletedEvent}')`);
+      assert.end();
+    });
+    t.test('cannot insert duplicate entity events', assert => {
+      assert.throws(() => db.run(`INSERT INTO entity_events (entity, event) values ('${thingEntity}', '${thingDeletedEvent}')`,
+          'UNIQUE constraint failed: entity_events.entity, entity_events.event'));
       assert.end();
     });
   });
