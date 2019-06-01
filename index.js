@@ -4,17 +4,11 @@ It also tests the schema with incorrect data, duplicate data and other likely re
  */
 
 /*
- TODO how can I check if "previous" exists? Maybe:
-
- WHERE parent in (SELECT id FROM events WHERE eventId = previousId)
- may be able to link previous to an id as a FK
- https://github.com/kripken/sql.js/issues/221
-
- I can't do this in CHECK, I have to write a BEFORE trigger to test the data
-triggers:
-TODO: block insertion of ts, sequence
-TODO: disable DELETE and UPDATE
-todo: first event for an entity key must 'previousId = null'
+  BEFORE triggers:
+  TODO: block insertion of ts, sequence
+  TODO: disable all DELETE, UPDATE, UPSERT
+  TODO: first event for an entity key must 'previousId = null'
+  TODO: previousId must be in same entity key
  */
 
 const test = require('tape');
@@ -129,6 +123,13 @@ test('setup', async setup => {
     t.test('insert events for an entity', assert => {
       assert.doesNotThrow(() => stmt.run([thingEntity, thingKey, thingCreatedEvent, data, eventId1, commandId1]));
       assert.doesNotThrow(() => stmt.run([thingEntity, thingKey, thingDeletedEvent, data, eventId2, commandId2, eventId1]));
+      assert.end();
+    });
+
+    t.test('previous event must exist', assert => {
+      assert.throws(() => stmt.run([thingEntity, thingKey, thingDeletedEvent, data, uuid(), uuid(), uuid()]),
+        /FOREIGN KEY constraint failed/,
+        'previous event id must exist');
       assert.end();
     });
 
