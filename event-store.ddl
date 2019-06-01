@@ -18,8 +18,7 @@ CREATE TABLE events (
     ts        TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     data      TEXT NOT NULL,
     command   TEXT NOT NULL UNIQUE,  -- Ensures commands only create one event
--- TODO previous can't be unique as second entity will be 0000. Maybe it can be null, with a CHECK for key not having events
-    previous  TEXT NOT NULL UNIQUE,  -- previous event uuid; 00000000-0000-0000-0000-000000000000 for first event
+    previous  TEXT UNIQUE,  -- previous event uuid; null for first event; null does not trigger UNIQUE constraint
     version   TEXT NOT NULL DEFAULT '0.0.0',
     -- ordering sequence
     sequence  INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,  -- sequence for all events in all domains
