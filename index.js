@@ -1,6 +1,5 @@
 /*
-This test suite exercises the database with specific, interleaved calls to simulate multi-client race conditions.
-It also tests the schema with incorrect data, duplicate data and other likely real-world problems.
+This test suite exercises the database schema with incorrect data, duplicate data and other likely real-world problems.
  */
 
 /*
