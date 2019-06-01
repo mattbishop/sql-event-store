@@ -11,18 +11,17 @@ CREATE TABLE entity_events(
 );
 
 CREATE TABLE events (
-    entity    TEXT NOT NULL,
-    event     TEXT NOT NULL,
-    key       TEXT NOT NULL,
-    id        TEXT NOT NULL UNIQUE,  -- event uuid
-    ts        TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    data      TEXT NOT NULL,
-    command   TEXT NOT NULL UNIQUE,  -- Ensures commands only create one event
-    previous  TEXT UNIQUE,  -- previous event uuid; null for first event; null does not trigger UNIQUE constraint
-    version   TEXT NOT NULL DEFAULT '0.0.0',
+    entity      TEXT NOT NULL,
+    entityKey   TEXT NOT NULL,
+    event       TEXT NOT NULL,
+    data        TEXT NOT NULL,
+    eventId     TEXT NOT NULL UNIQUE,  -- event uuid
+    commandId   TEXT NOT NULL UNIQUE,  -- Ensures commands only create one event
+    previousId  TEXT UNIQUE,  -- previous event uuid; null for first event; null does not trigger UNIQUE constraint
+    ts          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     -- ordering sequence
-    sequence  INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,  -- sequence for all events in all domains
+    sequence    INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,  -- sequence for all events in all entities
     FOREIGN KEY(entity, event) REFERENCES entity_events(entity, event)
 );
 
-CREATE INDEX entity_index ON events(entity, event, key);
+CREATE INDEX entity_index ON events(entity, entityKey, event);
