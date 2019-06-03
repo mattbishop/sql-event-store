@@ -19,3 +19,23 @@ Events follow other events in a sequence. In this event store, each event has a 
 - Insertion-ordered. Events must be consistently replayable in the order they were inserted.
 - No event race conditions. The event store prevents a client from writing an event to an entity if another event has been inserted after the client has replayed an event stream.
 - Event and Entity names cannot be mispelled or misapplied. A client cannot insert an event from the wrong entity. Event and entity names must be defined before use.
+
+### SQL Table Structure
+
+
+
+### Client Use
+
+Insert Entity Events
+
+Insert Events
+
+First Event for an Entity
+
+Subsequent Events
+
+Replaying Events
+
+For an Entity
+
+For multiple Entities

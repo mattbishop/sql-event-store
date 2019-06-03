@@ -4,8 +4,6 @@ This test suite exercises the database schema with incorrect data, duplicate dat
 
 /*
   BEFORE triggers:
-  TODO: block insertion of ts, sequence
-  TODO: disable all DELETE, UPDATE, UPSERT
   TODO: first event for an entity key must 'previousId = null'
   TODO: previousId must be in same entity key
  */
@@ -153,6 +151,36 @@ test('setup', async setup => {
         () => stmt.run([thingEntity, thingKey, thingDeletedEvent, data, uuid(), uuid(), eventId1]),
         /UNIQUE constraint failed: events\.previousId/,
         'cannot insert different event for same previous');
+      assert.end();
+    });
+  });
+
+  setup.test('cannot delete or update', t => {
+    t.test('cannot delete or update entity_events', assert => {
+      assert.throws(
+        () => db.exec(`DELETE FROM entity_events WHERE entity = '${tableTennisEntity}'`),
+        /Cannot delete entity_events/,
+        'cannot delete entity_events'
+      );
+      assert.throws(
+        () => db.exec(`UPDATE entity_events SET entity = 'fail' WHERE entity = '${tableTennisEntity}'`),
+        /Cannot update entity_events/,
+        'cannot update entity_events'
+      );
+      assert.end();
+    });
+
+    t.test('cannot delete or update events', assert => {
+      assert.throws(
+        () => db.exec(`DELETE FROM events WHERE entity = '${thingEntity}'`),
+        /Cannot delete events/,
+        'cannot delete events'
+      );
+      assert.throws(
+        () => db.exec(`UPDATE events SET entityKey = 'fail' WHERE entity = '${thingEntity}'`),
+        /Cannot update events/,
+        'cannot update events'
+      );
       assert.end();
     });
   });

@@ -26,3 +26,25 @@ CREATE TABLE events (
 );
 
 CREATE INDEX entity_index ON events(entity, entityKey, event);
+
+-- immutable entity_events
+CREATE TRIGGER no_delete_entity_events BEFORE DELETE ON entity_events
+    BEGIN
+        SELECT RAISE (FAIL, 'Cannot delete entity_events');
+    END;
+
+CREATE TRIGGER no_update_entity_events BEFORE UPDATE ON entity_events
+    BEGIN
+        SELECT RAISE (FAIL, 'Cannot update entity_events');
+    END;
+
+-- immutable events
+CREATE TRIGGER no_delete_events BEFORE DELETE ON events
+    BEGIN
+        SELECT RAISE (FAIL, 'Cannot delete events');
+    END;
+
+CREATE TRIGGER no_update_events BEFORE UPDATE ON events
+    BEGIN
+        SELECT RAISE (FAIL, 'Cannot update events');
+    END;
