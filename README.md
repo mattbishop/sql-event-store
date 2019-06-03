@@ -3,6 +3,22 @@ Demonstration of a SQ event store with deduplication and guaranteed event orderi
 
 This project uses SQLite and a node test suite to ensure the DDL complies with the design requirements. It can be ported to most SQL RDBMS and accessed from an number of writers, including high-load serverless functions.
 
+### Running
+
+One must have Node and NPM installed (Node 10+ should do fine) and then:
+
+```bash
+> npm install
+```
+
+Once it has finished installing the dependencies, run the test with:
+
+```bash
+> node index.js
+```
+
+This project uses [sql.js](https://github.com/kripken/sql.js), the pure Javascript port of SQLite to save you from compilation difficulties.
+
 ### Conceptual Model
 
 Event sourcing has some variations in practice. This event store works from a few opinions and terms that are easy to understand and map to other variations.
