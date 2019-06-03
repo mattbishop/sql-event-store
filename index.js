@@ -111,6 +111,18 @@ test('setup', async setup => {
       assert.end();
     });
 
+    t.test('UUIDs format for IDs', assert => {
+      assert.throws(
+        () => stmt.run([thingEntity, thingKey, thingCreatedEvent, data, 'not-a-uuid', commandId1]),
+        /CHECK constraint failed: events/,
+        'eventId must be a UUID');
+      assert.throws(
+        () => stmt.run([thingEntity, thingKey, thingCreatedEvent, data, thingEventId1, 'not-a-uuid']),
+        /CHECK constraint failed: events/,
+        'commandId must be a UUID');
+      assert.end();
+    });
+
     t.test('Cannot insert event from wrong entity', assert => {
       assert.throws(
         () => stmt.run([tableTennisEntity, thingKey, thingCreatedEvent, data, thingEventId1, commandId1]),
