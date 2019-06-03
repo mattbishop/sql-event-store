@@ -120,6 +120,7 @@ test('setup', async setup => {
     t.test('insert events for an entity', assert => {
       assert.doesNotThrow(() => stmt.run([thingEntity, thingKey, thingCreatedEvent, data, eventId1, commandId1]));
       assert.doesNotThrow(() => stmt.run([thingEntity, thingKey, thingDeletedEvent, data, eventId2, commandId2, eventId1]));
+      assert.doesNotThrow(() => stmt.run([tableTennisEntity, 'home', pingEvent, data, uuid(), uuid()]));
       assert.end();
     });
 
@@ -130,11 +131,15 @@ test('setup', async setup => {
       assert.end();
     });
 
-    t.test('Cannot insert duplicates', assert => {
+    t.test('entity must not have events if previousId is null', assert => {
       assert.throws(
-        () => stmt.run([thingEntity, thingKey, thingCreatedEvent, data, eventId1, commandId1]),
-        /UNIQUE constraint failed/,
-        'cannot insert complete duplicate first event');
+        () => stmt.run([tableTennisEntity, 'home', pongEvent, data, uuid(), uuid()]),
+        /previousId can only be null for first entity event/,
+        'cannot insert multiple null previousId for an entity');
+      assert.end();
+    });
+
+    t.test('Cannot insert duplicates', assert => {
       assert.throws(
         () => stmt.run([thingEntity, thingKey, thingCreatedEvent, data, eventId2, commandId2, eventId1]),
         /UNIQUE constraint failed/,

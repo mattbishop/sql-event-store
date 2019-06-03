@@ -2,14 +2,13 @@
 PRAGMA foreign_keys = ON;
 
 DROP TABLE IF EXISTS entity_events;
-DROP TABLE IF EXISTS events;
-
 CREATE TABLE entity_events(
     entity  TEXT NOT NULL,
     event   TEXT NOT NULL,
     PRIMARY KEY (entity, event)
 );
 
+DROP TABLE IF EXISTS events;
 CREATE TABLE events (
     entity      TEXT NOT NULL,
     entityKey   TEXT NOT NULL,
@@ -21,8 +20,8 @@ CREATE TABLE events (
     ts          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     -- ordering sequence
     sequence    INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,  -- sequence for all events in all entities
-    FOREIGN KEY(entity, event) REFERENCES entity_events(entity, event),
-    FOREIGN KEY(previousId) REFERENCES events(eventId)
+    FOREIGN KEY (entity, event) REFERENCES entity_events(entity, event),
+    FOREIGN KEY (previousId) REFERENCES events(eventId)
 );
 
 CREATE INDEX entity_index ON events(entity, entityKey, event);
@@ -47,4 +46,13 @@ CREATE TRIGGER no_delete_events BEFORE DELETE ON events
 CREATE TRIGGER no_update_events BEFORE UPDATE ON events
     BEGIN
         SELECT RAISE (FAIL, 'Cannot update events');
+    END;
+
+-- Can only use null previousId for first event in an entity
+CREATE TRIGGER first_event_for_entity BEFORE INSERT ON events
+    FOR EACH ROW
+    WHEN NEW.previousId IS NULL
+    AND (SELECT COUNT(*) from events WHERE NEW.entity = entity AND NEW.entityKey = entityKey) > 0
+    BEGIN
+        SELECT RAISE (FAIL, 'previousId can only be null for first entity event');
     END;
