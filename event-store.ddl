@@ -20,8 +20,7 @@ CREATE TABLE events (
     ts          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     -- ordering sequence
     sequence    INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,  -- sequence for all events in all entities
-    FOREIGN KEY (entity, event) REFERENCES entity_events(entity, event),
-    FOREIGN KEY (previousId) REFERENCES events(eventId)
+    FOREIGN KEY (entity, event) REFERENCES entity_events(entity, event)
 );
 
 CREATE INDEX entity_index ON events(entity, entityKey, event);
@@ -55,4 +54,13 @@ CREATE TRIGGER first_event_for_entity BEFORE INSERT ON events
     AND (SELECT COUNT(*) from events WHERE NEW.entity = entity AND NEW.entityKey = entityKey) > 0
     BEGIN
         SELECT RAISE (FAIL, 'previousId can only be null for first entity event');
+    END;
+
+-- previousId must be in the same entity as the event
+CREATE TRIGGER previousId_in_same_entity BEFORE INSERT ON events
+    FOR EACH ROW
+    WHEN NEW.previousId IS NOT NULL
+    AND (SELECT COUNT(*) from events WHERE NEW.entity = entity AND NEW.entityKey = entityKey and NEW.previousId = eventId) == 0
+    BEGIN
+        SELECT RAISE (FAIL, 'previousId must be in same entity');
     END;
