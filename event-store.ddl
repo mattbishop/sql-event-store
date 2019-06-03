@@ -51,7 +51,7 @@ CREATE TRIGGER no_update_events BEFORE UPDATE ON events
 CREATE TRIGGER first_event_for_entity BEFORE INSERT ON events
     FOR EACH ROW
     WHEN NEW.previousId IS NULL
-    AND EXISTS (SELECT entityKey FROM events
+    AND EXISTS (SELECT * FROM events
         WHERE NEW.entity = entity
           AND NEW.entityKey = entityKey)
     BEGIN
@@ -62,7 +62,7 @@ CREATE TRIGGER first_event_for_entity BEFORE INSERT ON events
 CREATE TRIGGER previousId_in_same_entity BEFORE INSERT ON events
     FOR EACH ROW
     WHEN NEW.previousId IS NOT NULL
-    AND NOT EXISTS (SELECT entityKey FROM events
+    AND NOT EXISTS (SELECT * FROM events
         WHERE NEW.entity = entity
           AND NEW.entityKey = entityKey
           AND NEW.previousId = eventId)
