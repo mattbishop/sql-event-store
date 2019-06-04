@@ -25,7 +25,7 @@ async function initDb() {
 function shutdownDb(db) {
   const data = db.export();
   const buffer = Buffer.from(data);
-  fs.writeFileSync('test-db.sqlite', buffer);
+  fs.writeFileSync('test-event-store.sqlite', buffer);
   db.close();
 }
 
