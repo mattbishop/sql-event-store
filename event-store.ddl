@@ -5,7 +5,7 @@ DROP TABLE IF EXISTS entity_events;
 CREATE TABLE entity_events(
     entity  TEXT NOT NULL,
     event   TEXT NOT NULL,
-    PRIMARY KEY (entity, event)
+    PRIMARY KEY (entity, event) ON CONFLICT IGNORE
 );
 
 DROP TABLE IF EXISTS events;

@@ -35,7 +35,7 @@ test('setup', async setup => {
 
   setup.test('insert entity_events', t => {
 
-    const stmt = db.prepare('INSERT INTO entity_events (entity, event) values (?, ?)');
+    const stmt = db.prepare('INSERT INTO entity_events (entity, event) VALUES (?, ?)');
 
     t.test('cannot insert null fields', assert => {
       assert.throws(
@@ -57,17 +57,21 @@ test('setup', async setup => {
       assert.end();
     });
 
-    t.test('cannot insert duplicate entity events', assert => {
-      assert.throws(
-        () => stmt.run([thingEntity, thingCreatedEvent]),
-        /UNIQUE constraint failed: entity_events\.entity, entity_events\.event/,
-        'cannot duplicate entity events');
-      assert.end();
+    t.test('insert duplicate entity events does not throw an Error', async assert => {
+      assert.plan(4);
+      assert.doesNotThrow(() => stmt.run([thingEntity, thingCreatedEvent]));
+      assert.doesNotThrow(() => stmt.run([thingEntity, thingCreatedEvent]));
+      //use timeout so asserts above can complete
+      setTimeout(async () => {
+        const result = await db.exec(`SELECT COUNT(*) FROM entity_events WHERE entity = '${thingEntity}' AND event = '${thingCreatedEvent}'`);
+        assert.equal(result[0].values[0][0], 1);
+        assert.pass('no entity event duplicates');
+      }, 100);
     });
   });
 
   setup.test('insert events', t => {
-    const stmt = db.prepare('INSERT INTO events(entity, entityKey, event, data, eventId, commandId, previousId) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    const stmt = db.prepare('INSERT INTO events (entity, entityKey, event, data, eventId, commandId, previousId) VALUES (?, ?, ?, ?, ?, ?, ?)');
     const thingKey = '1';
     const homeTableKey = 'home';
     const workTableKey = 'work';
