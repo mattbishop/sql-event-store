@@ -17,9 +17,14 @@ const pongEvent = 'ball-ponged';
 async function initDb() {
   const SQL = await initSqlJs();
   const db = new SQL.Database();
-  const createScript = fs.readFileSync('./event-store.ddl', 'utf8');
-  db.run(createScript);
+  loadDdl(db);
   return db;
+}
+
+async function loadDdl(db) {
+  const createScript = fs.readFileSync('./event-store.ddl', 'utf8');
+  return db.run(createScript);
+
 }
 
 function shutdownDb(db) {
@@ -32,6 +37,11 @@ function shutdownDb(db) {
 // use t.plan() for async testing too.
 test('setup', async setup => {
   const db = await initDb();
+
+  setup.test('running setup on existing db succeeds', t => {
+    t.doesNotThrow(async () => await loadDdl(db))
+    t.end();
+  });
 
   setup.test('insert entity_events', t => {
 

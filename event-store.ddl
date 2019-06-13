@@ -1,14 +1,15 @@
 -- SQLITE event store
 PRAGMA foreign_keys = ON;
 
+DROP TABLE IF EXISTS events;
 DROP TABLE IF EXISTS entity_events;
+
 CREATE TABLE entity_events(
     entity  TEXT NOT NULL,
     event   TEXT NOT NULL,
     PRIMARY KEY (entity, event) ON CONFLICT IGNORE
 );
 
-DROP TABLE IF EXISTS events;
 CREATE TABLE events (
     entity      TEXT NOT NULL,
     entityKey   TEXT NOT NULL,
