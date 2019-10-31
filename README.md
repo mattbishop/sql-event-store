@@ -1,7 +1,15 @@
 # SQL Event Store
 Demonstration of a SQL event store with deduplication and guaranteed event ordering. The database rules are intended to prevent incorrect information from entering into an event stream. You are assumed to have familiarity with [event sourcing](https://martinfowler.com/eaaDev/EventSourcing.html).
 
-This project uses SQLite and a node test suite to ensure the DDL complies with the design requirements. This SQLite event store can be used in highly-constained environments that require an embedded event store, like a mobile device or an IoT system. This event store can also be ported to most SQL RDBMS and accessed from any number of writers, including high-load serverless functions, without a coordinating “single writer” process. 
+This project uses a node test suite and SQLite to ensure the DDL complies with the design requirements. This SQLite event store can be used in highly-constrained environments that require an embedded event store, like a mobile device or an IoT system. 
+
+This event store can also be ported to most SQL RDBMS and accessed from any number of writers, including high-load serverless functions, without a coordinating “single writer” process. The project includes a Postgres version of the DDL.
+
+# Postgres Event Store
+
+The [Postgres version](./postgres-event-store.ddl) of SQL event store has the same behavior as the SQLite version. It was built and tested on Postgres 11 but can be ported to earlier versions as needed.
+
+The postgres version can be tested with the [test-postgres.js]() script. Run this file instead of `index.js`. It will connect to the postgres server defined in the environment variables, according to [node-postgres](https://node-postgres.com/features/connecting). 
 
 ### Running
 
@@ -17,7 +25,7 @@ Once it has finished installing the dependencies, run the [tests](./index.js) wi
 > node index.js
 ```
 
-This project uses [sql.js](https://github.com/kripken/sql.js), the pure Javascript port of SQLite to save you from compilation difficulties. The test will dump the test database to `test-event-store.sqlite` for your examination.
+The test uses [sql.js](https://github.com/kripken/sql.js), the pure Javascript port of SQLite for reliable compilation and test execution. The test will dump the test database to `test-event-store.sqlite` for your examination.
 
 ### Conceptual Model
 
@@ -38,7 +46,7 @@ Appends to other entities do not affect each other, so many events can be append
 
 ### SQL Table Structure
 
-This event store consists of two tables [as described in the DDL](./event-store.ddl). The first, `entity_events`, contains the event definitions for an entity type. It must be populated before events can be appended to the main table called `events`.
+This event store consists of two tables [as described in the DDL](./sqlite-event-store.ddl). The first, `entity_events`, contains the event definitions for an entity type. It must be populated before events can be appended to the main table called `events`.
 
 #### `entity_events` Table
 

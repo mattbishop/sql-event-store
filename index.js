@@ -22,7 +22,7 @@ async function initDb() {
 }
 
 async function loadDdl(db) {
-  const createScript = fs.readFileSync('./event-store.ddl', 'utf8');
+  const createScript = fs.readFileSync('./sqlite-event-store.ddl', 'utf8');
   return db.run(createScript);
 
 }

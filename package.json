@@ -25,8 +25,10 @@
   },
   "homepage": "https://github.com/mattbishop/sql-event-store#readme",
   "dependencies": {
+    "pg": "^7.12.1",
     "sql.js": "^1.0.0",
     "tape": "^4.11.0",
+    "tape-promise": "^4.0.0",
     "uuid": "^3.3.3"
   }
 }
