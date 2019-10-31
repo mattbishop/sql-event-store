@@ -21,7 +21,7 @@ CREATE TABLE events (
     previousId  TEXT UNIQUE,
     ts          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     -- ordering sequence
-    sequence    INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,  -- sequence for all events in all entities
+    sequence    INTEGER PRIMARY KEY AUTOINCREMENT,  -- sequence for all events in all entities
     FOREIGN KEY (entity, event) REFERENCES entity_events(entity, event)
 );
 
