@@ -105,8 +105,8 @@ SELECT event,
        data, 
        eventId 
 FROM events 
-    WHERE entity = ? 
-      AND entityKey = ? 
+    WHERE entityKey = ? 
+      AND entity = ? 
 ORDER BY sequence;
 ```
 
