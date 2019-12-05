@@ -41,7 +41,7 @@ CREATE TABLE events
     FOREIGN KEY (entity, event) REFERENCES entity_events (entity, event)
 );
 
-CREATE INDEX entity_index ON events (entitykey);
+CREATE INDEX entity_index ON events (entitykey, entity);
 
 -- immutable events
 CREATE OR REPLACE RULE ignore_delete_events AS ON DELETE TO events
@@ -56,9 +56,10 @@ CREATE OR REPLACE FUNCTION check_first_event_for_entity() RETURNS trigger AS
 $$
 BEGIN
     IF (NEW.previousid IS NULL
-        AND EXISTS(SELECT *
+        AND EXISTS(SELECT 1
                    FROM events
-                   WHERE NEW.entitykey = entitykey))
+                   WHERE NEW.entitykey = entitykey
+    				 AND NEW.entity = entity))
     THEN
         RAISE EXCEPTION 'previousid can only be null for first entity event';
 END IF;
@@ -81,10 +82,11 @@ CREATE OR REPLACE FUNCTION check_previousid_in_same_entity() RETURNS trigger AS
 $$
 BEGIN
     IF (NEW.previousid IS NOT NULL
-        AND NOT EXISTS(SELECT *
+        AND NOT EXISTS(SELECT 1
                        FROM events
                        WHERE NEW.previousid = eventid
-                         AND NEW.entitykey = entitykey))
+                         AND NEW.entitykey = entitykey
+    					 AND NEW.entity = entity))
     THEN
         RAISE EXCEPTION 'previousid must be in the same entity';
 END IF;

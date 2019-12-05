@@ -27,7 +27,7 @@ CREATE TABLE events
     FOREIGN KEY (entity, event) REFERENCES entity_events (entity, event)
 );
 
-CREATE INDEX entity_index ON events (entityKey);
+CREATE INDEX entity_index ON events (entityKey, entity);
 
 -- immutable entity_events
 CREATE TRIGGER no_delete_entity_events
@@ -65,9 +65,10 @@ CREATE TRIGGER first_event_for_entity
     ON events
     FOR EACH ROW
     WHEN NEW.previousId IS NULL
-        AND EXISTS(SELECT *
+        AND EXISTS(SELECT 1
                    FROM events
-                   WHERE NEW.entityKey = entityKey)
+                   WHERE NEW.entityKey = entityKey
+            		 AND NEW.entity = entity)
 BEGIN
     SELECT RAISE(FAIL, 'previousId can only be null for first entity event');
 END;
@@ -81,7 +82,8 @@ CREATE TRIGGER previousId_in_same_entity
         AND NOT EXISTS(SELECT *
                        FROM events
                        WHERE NEW.previousId = eventId
-                         AND NEW.entityKey = entityKey)
+                         AND NEW.entityKey = entityKey
+            			 AND NEW.entity = entity)
 BEGIN
     SELECT RAISE(FAIL, 'previousId must be in same entity');
 END;
