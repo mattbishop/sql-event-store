@@ -41,7 +41,7 @@ CREATE TABLE events
     FOREIGN KEY (entity, event) REFERENCES entity_events (entity, event)
 );
 
-CREATE INDEX entity_index ON events (entity, entitykey, event);
+CREATE INDEX entity_index ON events (entitykey);
 
 -- immutable events
 CREATE OR REPLACE RULE ignore_delete_events AS ON DELETE TO events
@@ -58,8 +58,7 @@ BEGIN
     IF (NEW.previousid IS NULL
         AND EXISTS(SELECT *
                    FROM events
-                   WHERE NEW.entity = entity
-                     AND NEW.entitykey = entitykey))
+                   WHERE NEW.entitykey = entitykey))
     THEN
         RAISE EXCEPTION 'previousid can only be null for first entity event';
 END IF;
@@ -84,9 +83,8 @@ BEGIN
     IF (NEW.previousid IS NOT NULL
         AND NOT EXISTS(SELECT *
                        FROM events
-                       WHERE NEW.entity = entity
-                         AND NEW.entitykey = entitykey
-                         AND NEW.previousid = eventid))
+                       WHERE NEW.previousid = eventid
+                         AND NEW.entitykey = entitykey))
     THEN
         RAISE EXCEPTION 'previousid must be in the same entity';
 END IF;
