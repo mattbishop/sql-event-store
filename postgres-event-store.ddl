@@ -59,7 +59,7 @@ BEGIN
         AND EXISTS(SELECT 1
                    FROM events
                    WHERE NEW.entitykey = entitykey
-    				 AND NEW.entity = entity))
+                     AND NEW.entity = entity))
     THEN
         RAISE EXCEPTION 'previousid can only be null for first entity event';
 END IF;
@@ -86,7 +86,7 @@ BEGIN
                        FROM events
                        WHERE NEW.previousid = eventid
                          AND NEW.entitykey = entitykey
-    					 AND NEW.entity = entity))
+                         AND NEW.entity = entity))
     THEN
         RAISE EXCEPTION 'previousid must be in the same entity';
 END IF;
