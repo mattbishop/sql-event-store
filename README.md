@@ -9,7 +9,7 @@ This event store can also be ported to most SQL RDBMS and accessed from any numb
 
 The [Postgres version](./postgres-event-store.ddl) of SQL event store has the same behavior as the SQLite version. It was built and tested on Postgres 11 but can be ported to earlier versions as needed.
 
-The postgres version can be tested with the [test-postgres.js]() script. Run this file instead of `index.js`. It will connect to the postgres server defined in the environment variables, according to [node-postgres](https://node-postgres.com/features/connecting). 
+The postgres version can be tested with the [test-postgres.js]() script. Run this file instead of `test-sqlite.js`. It will connect to the postgres server defined in the environment variables, according to [node-postgres](https://node-postgres.com/features/connecting). 
 
 ### Running
 
@@ -19,10 +19,10 @@ One must have Node and NPM installed (Node 10 is what I used) and then:
 > npm install
 ```
 
-Once it has finished installing the dependencies, run the [tests](./index.js) with:
+Once it has finished installing the dependencies, run the [tests](test-sqlite.js) with:
 
 ```bash
-> node index.js
+> node test-sqlite.js
 ```
 
 The test uses [sql.js](https://github.com/kripken/sql.js), the pure Javascript port of SQLite for reliable compilation and test execution. The test will dump the test database to `test-event-store.sqlite` for your examination.
