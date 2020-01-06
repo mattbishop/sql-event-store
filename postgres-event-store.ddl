@@ -35,9 +35,9 @@ CREATE TABLE events
     commandid  UUID     NOT NULL UNIQUE,
     -- previous event uuid; null for first event; null does not trigger UNIQUE constraint??
     previousid UUID     UNIQUE,
-    ts         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    timestamp  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     -- ordering sequence
-    sequence   SERIAL PRIMARY KEY, -- sequence for all events in all entities
+    sequence   BIGSERIAL PRIMARY KEY, -- sequence for all events in all entities
     FOREIGN KEY (entity, event) REFERENCES entity_events (entity, event)
 );
 

@@ -21,7 +21,7 @@ CREATE TABLE events
     commandId  TEXT NOT NULL UNIQUE CHECK (commandId LIKE '________-____-____-____-____________'),
     -- previous event uuid; null for first event; null does not trigger UNIQUE constraint
     previousId TEXT UNIQUE,
-    ts         TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    timestamp  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     -- ordering sequence
     sequence   INTEGER PRIMARY KEY AUTOINCREMENT, -- sequence for all events in all entities
     FOREIGN KEY (entity, event) REFERENCES entity_events (entity, event)
