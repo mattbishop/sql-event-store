@@ -21,10 +21,9 @@ async function initDb() {
   return db;
 }
 
-async function loadDdl(db) {
+function loadDdl(db) {
   const createScript = fs.readFileSync('./sqlite-event-store.ddl', 'utf8');
   return db.run(createScript);
-
 }
 
 function shutdownDb(db) {
@@ -39,7 +38,7 @@ test('setup', async setup => {
   const db = await initDb();
 
   setup.test('running setup on existing db succeeds', t => {
-    t.doesNotThrow(async () => await loadDdl(db))
+    t.doesNotThrow(() => loadDdl(db));
     t.end();
   });
 
@@ -67,16 +66,12 @@ test('setup', async setup => {
       assert.end();
     });
 
-    t.test('insert duplicate entity events does not throw an Error', async assert => {
-      assert.plan(4);
+    t.test('insert duplicate entity events does not throw an Error', assert => {
       assert.doesNotThrow(() => stmt.run([thingEntity, thingCreatedEvent]));
       assert.doesNotThrow(() => stmt.run([thingEntity, thingCreatedEvent]));
-      //use timeout so asserts above can complete
-      setTimeout(async () => {
-        const result = await db.exec(`SELECT COUNT(*) FROM entity_events WHERE entity = '${thingEntity}' AND event = '${thingCreatedEvent}'`);
-        assert.equal(result[0].values[0][0], 1);
-        assert.pass('no entity event duplicates');
-      }, 100);
+      const result = db.exec(`SELECT COUNT(*) FROM entity_events WHERE entity = '${thingEntity}' AND event = '${thingCreatedEvent}'`);
+      assert.equal(result[0].values[0][0], 1);
+      assert.end();
     });
   });
 
