@@ -4,7 +4,7 @@
 const test = require('tape');
 const fs = require('fs');
 const initSqlJs = require('sql.js');
-const uuid = require('uuid/v4');
+const uuid = require('uuid');
 
 const thingEntity = 'thing';
 const thingCreatedEvent = 'thing-created';
@@ -33,7 +33,6 @@ function shutdownDb(db) {
   db.close();
 }
 
-// use t.plan() for async testing too.
 test('setup', async setup => {
   const db = await initDb();
 
@@ -81,13 +80,13 @@ test('setup', async setup => {
     const homeTableKey = 'home';
     const workTableKey = 'work';
 
-    const commandId1 = uuid();
-    const commandId2 = uuid();
-    const thingEventId1 = uuid();
-    const thingEventId2 = uuid();
+    const commandId1 = uuid.v4();
+    const commandId2 = uuid.v4();
+    const thingEventId1 = uuid.v4();
+    const thingEventId2 = uuid.v4();
 
-    const pingEventHomeId = uuid();
-    const pingEventWorkId = uuid();
+    const pingEventHomeId = uuid.v4();
+    const pingEventWorkId = uuid.v4();
 
 
     const data = '{}';
@@ -143,18 +142,18 @@ test('setup', async setup => {
     t.test('insert events for an entity', assert => {
       assert.doesNotThrow(() => stmt.run([thingEntity, thingKey, thingCreatedEvent, data, thingEventId1, commandId1]));
       assert.doesNotThrow(() => stmt.run([thingEntity, thingKey, thingDeletedEvent, data, thingEventId2, commandId2, thingEventId1]));
-      assert.doesNotThrow(() => stmt.run([tableTennisEntity, homeTableKey, pingEvent, data, pingEventHomeId, uuid()]));
-      assert.doesNotThrow(() => stmt.run([tableTennisEntity, workTableKey, pingEvent, data, pingEventWorkId, uuid()]));
+      assert.doesNotThrow(() => stmt.run([tableTennisEntity, homeTableKey, pingEvent, data, pingEventHomeId, uuid.v4()]));
+      assert.doesNotThrow(() => stmt.run([tableTennisEntity, workTableKey, pingEvent, data, pingEventWorkId, uuid.v4()]));
       assert.end();
     });
 
     t.test('previousId rules', assert => {
       assert.throws(
-        () => stmt.run([tableTennisEntity, homeTableKey, pingEvent, data, pingEventHomeId, uuid()]),
+        () => stmt.run([tableTennisEntity, homeTableKey, pingEvent, data, pingEventHomeId, uuid.v4()]),
         /previousId can only be null for first entity event/,
         'cannot insert multiple null previousId for an entity');
       assert.throws(
-        () => stmt.run([tableTennisEntity, workTableKey, pongEvent, data, uuid(), uuid(), pingEventHomeId]),
+        () => stmt.run([tableTennisEntity, workTableKey, pongEvent, data, uuid.v4(), uuid.v4(), pingEventHomeId]),
         /previousId must be in same entity/,
         'previousId must be in same entity');
       assert.end();
@@ -166,15 +165,15 @@ test('setup', async setup => {
         /UNIQUE constraint failed/,
         'cannot insert complete duplicate event');
       assert.throws(
-        () => stmt.run([tableTennisEntity, homeTableKey, pongEvent, data, pingEventHomeId, uuid(), pingEventHomeId]),
+        () => stmt.run([tableTennisEntity, homeTableKey, pongEvent, data, pingEventHomeId, uuid.v4(), pingEventHomeId]),
         /UNIQUE constraint failed: events\.eventId/,
         'cannot insert different event for same id');
       assert.throws(
-        () => stmt.run([thingEntity, thingKey, thingDeletedEvent, data, uuid(), commandId1, thingEventId2]),
+        () => stmt.run([thingEntity, thingKey, thingDeletedEvent, data, uuid.v4(), commandId1, thingEventId2]),
         /UNIQUE constraint failed: events\.commandId/,
         'cannot insert different event for same command');
       assert.throws(
-        () => stmt.run([thingEntity, thingKey, thingDeletedEvent, data, uuid(), uuid(), thingEventId1]),
+        () => stmt.run([thingEntity, thingKey, thingDeletedEvent, data, uuid.v4(), uuid.v4(), thingEventId1]),
         /UNIQUE constraint failed: events\.previousId/,
         'cannot insert different event for same previous');
       assert.end();

@@ -6,7 +6,7 @@ const _test = require('tape-promise').default;
 const test = _test(tape)
 const fs = require('fs');
 const pg = require('pg');
-const uuid = require('uuid/v4');
+const uuid = require('uuid');
 
 const thingEntity = 'thing';
 const thingCreatedEvent = 'thing-created';
@@ -82,13 +82,13 @@ test('setup', async setup => {
     const homeTableKey = 'home';
     const workTableKey = 'work';
 
-    const commandId1 = uuid();
-    const commandId2 = uuid();
-    const thingEventId1 = uuid();
-    const thingEventId2 = uuid();
+    const commandId1 = uuid.v4();
+    const commandId2 = uuid.v4();
+    const thingEventId1 = uuid.v4();
+    const thingEventId2 = uuid.v4();
 
-    const pingEventHomeId = uuid();
-    const pingEventWorkId = uuid();
+    const pingEventHomeId = uuid.v4();
+    const pingEventWorkId = uuid.v4();
 
 
     const data = {};
@@ -144,18 +144,18 @@ test('setup', async setup => {
     t.test('insert events for an entity', async assert => {
       await assert.doesNotReject(() => db.query(stmt, [thingEntity, thingKey, thingCreatedEvent, data, thingEventId1, commandId1, null]));
       await assert.doesNotReject(() => db.query(stmt, [thingEntity, thingKey, thingDeletedEvent, data, thingEventId2, commandId2, thingEventId1]));
-      await assert.doesNotReject(() => db.query(stmt, [tableTennisEntity, homeTableKey, pingEvent, data, pingEventHomeId, uuid(), null]));
-      await assert.doesNotReject(() => db.query(stmt, [tableTennisEntity, workTableKey, pingEvent, data, pingEventWorkId, uuid(), null]));
+      await assert.doesNotReject(() => db.query(stmt, [tableTennisEntity, homeTableKey, pingEvent, data, pingEventHomeId, uuid.v4(), null]));
+      await assert.doesNotReject(() => db.query(stmt, [tableTennisEntity, workTableKey, pingEvent, data, pingEventWorkId, uuid.v4(), null]));
       assert.end();
     });
 
     t.test('previousId rules', async assert => {
       await assert.rejects(
-        () => db.query(stmt, [tableTennisEntity, homeTableKey, pingEvent, data, pingEventHomeId, uuid(), null]),
+        () => db.query(stmt, [tableTennisEntity, homeTableKey, pingEvent, data, pingEventHomeId, uuid.v4(), null]),
         /error: previousid can only be null for first entity event/,
         'cannot insert multiple null previousid for an entity');
       await assert.rejects(
-        () => db.query(stmt, [tableTennisEntity, workTableKey, pongEvent, data, uuid(), uuid(), pingEventHomeId]),
+        () => db.query(stmt, [tableTennisEntity, workTableKey, pongEvent, data, uuid.v4(), uuid.v4(), pingEventHomeId]),
         /error: previousid must be in the same entity/,
         'previousid must be in same entity');
       assert.end();
@@ -167,15 +167,15 @@ test('setup', async setup => {
         /error: duplicate key value violates unique constraint "events_eventid_key"/,
         'cannot insert complete duplicate event');
       await assert.rejects(
-        () => db.query(stmt, [tableTennisEntity, homeTableKey, pongEvent, data, pingEventHomeId, uuid(), pingEventHomeId]),
+        () => db.query(stmt, [tableTennisEntity, homeTableKey, pongEvent, data, pingEventHomeId, uuid.v4(), pingEventHomeId]),
         /error: duplicate key value violates unique constraint "events_eventid_key"/,
         'cannot insert different event for same id');
       await assert.rejects(
-        () => db.query(stmt, [thingEntity, thingKey, thingDeletedEvent, data, uuid(), commandId1, thingEventId2]),
+        () => db.query(stmt, [thingEntity, thingKey, thingDeletedEvent, data, uuid.v4(), commandId1, thingEventId2]),
         /error: duplicate key value violates unique constraint "events_commandid_key"/,
         'cannot insert different event for same command');
       await assert.rejects(
-        () => db.query(stmt, [thingEntity, thingKey, thingDeletedEvent, data, uuid(), uuid(), thingEventId1]),
+        () => db.query(stmt, [thingEntity, thingKey, thingDeletedEvent, data, uuid.v4(), uuid.v4(), thingEventId1]),
         /error: duplicate key value violates unique constraint "events_previousid_key"/,
         'cannot insert different event for same previous');
       assert.end();
