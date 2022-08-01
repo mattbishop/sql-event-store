@@ -122,11 +122,11 @@ test('setup', async setup => {
     t.test('UUIDs format for IDs', assert => {
       assert.throws(
         () => stmt.run([thingEntity, thingKey, thingCreatedEvent, data, 'not-a-uuid', commandId1]),
-        /CHECK constraint failed: events/,
+        /CHECK constraint failed: eventId/,
         'eventId must be a UUID');
       assert.throws(
         () => stmt.run([thingEntity, thingKey, thingCreatedEvent, data, thingEventId1, 'not-a-uuid']),
-        /CHECK constraint failed: events/,
+        /CHECK constraint failed: commandId/,
         'commandId must be a UUID');
       assert.end();
     });

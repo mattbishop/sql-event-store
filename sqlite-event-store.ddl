@@ -65,10 +65,10 @@ CREATE TRIGGER first_event_for_entity
     ON events
     FOR EACH ROW
     WHEN NEW.previousId IS NULL
-        AND EXISTS(SELECT 1
-                   FROM events
-                   WHERE NEW.entityKey = entityKey
-                     AND NEW.entity = entity)
+        AND EXISTS (SELECT 1
+                    FROM events
+                    WHERE NEW.entityKey = entityKey
+                      AND NEW.entity = entity)
 BEGIN
     SELECT RAISE(FAIL, 'previousId can only be null for first entity event');
 END;
@@ -79,11 +79,11 @@ CREATE TRIGGER previousId_in_same_entity
     ON events
     FOR EACH ROW
     WHEN NEW.previousId IS NOT NULL
-        AND NOT EXISTS(SELECT *
-                       FROM events
-                       WHERE NEW.previousId = eventId
-                         AND NEW.entityKey = entityKey
-                         AND NEW.entity = entity)
+        AND NOT EXISTS (SELECT 1
+                        FROM events
+                        WHERE NEW.previousId = eventId
+                          AND NEW.entityKey = entityKey
+                          AND NEW.entity = entity)
 BEGIN
     SELECT RAISE(FAIL, 'previousId must be in same entity');
 END;

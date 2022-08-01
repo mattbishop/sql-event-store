@@ -17,7 +17,8 @@ const pingEvent = 'ball-pinged';
 const pongEvent = 'ball-ponged';
 
 async function initDb() {
-  const db = new pg.Pool()
+  const db = new pg.Client()
+  db.connect()
   await loadDdl(db);
   return db;
 }
@@ -48,11 +49,11 @@ test('setup', async setup => {
     t.test('cannot insert null fields', async assert => {
       await assert.rejects(
         () => db.query(stmt, [null, thingCreatedEvent]),
-        /error: null value in column "entity" violates not-null constraint/,
+        /error: null value in column "entity" of relation "entity_events" violates not-null constraint/,
         'cannot insert null entity');
       await assert.rejects(
         () => db.query(stmt, [thingEntity, null]),
-        /error: null value in column "event" violates not-null constraint/,
+        /error: null value in column "event" of relation "entity_events" violates not-null constraint/,
         'cannot insert null event');
       assert.end();
     });
@@ -96,27 +97,27 @@ test('setup', async setup => {
     t.test('cannot insert empty columns', async assert => {
       await assert.rejects(
         () => db.query(stmt, [null, thingKey, thingCreatedEvent, data, thingEventId1, commandId1, null]),
-        /error: null value in column "entity" violates not-null constraint/,
+        /error: null value in column "entity" of relation "events" violates not-null constraint/,
         'cannot insert null entity');
       await assert.rejects(
         () => db.query(stmt, [thingEntity, null, thingCreatedEvent, data, thingEventId1, commandId1, null]),
-        /error: null value in column "entitykey" violates not-null constraint/,
+        /error: null value in column "entitykey" of relation "events" violates not-null constraint/,
         'cannot insert null entity key');
       await assert.rejects(
         () => db.query(stmt, [thingEntity, thingKey, null, data, thingEventId1, commandId1, null]),
-        /error: null value in column "event" violates not-null constraint/,
+        /error: null value in column "event" of relation "events" violates not-null constraint/,
         'cannot insert null event');
       await assert.rejects(
         () => db.query(stmt, [thingEntity, thingKey, thingCreatedEvent, null, thingEventId1, commandId1, null]),
-        /error: null value in column "data" violates not-null constraint/,
+        /error: null value in column "data" of relation "events" violates not-null constraint/,
         'cannot insert null event data');
       await assert.rejects(
         () => db.query(stmt, [thingEntity, thingKey, thingCreatedEvent, data, null, commandId1, null]),
-        /error: null value in column "eventid" violates not-null constraint/,
+        /error: null value in column "eventid" of relation "events" violates not-null constraint/,
         'cannot insert null event id');
       await assert.rejects(
         () => db.query(stmt, [thingEntity, thingKey, thingCreatedEvent, data, thingEventId1, null, null]),
-        /error: null value in column "commandid" violates not-null constraint/,
+        /error: null value in column "commandid" of relation "events" violates not-null constraint/,
         'cannot insert null command');
       assert.end();
     });
@@ -136,7 +137,7 @@ test('setup', async setup => {
     t.test('Cannot insert event from wrong entity', async assert => {
       await assert.rejects(
         () => db.query(stmt, [tableTennisEntity, thingKey, thingCreatedEvent, data, thingEventId1, commandId1, null]),
-        /error: insert or update on table "events" violates foreign key constraint "events_entity_fkey"/,
+        /error: insert or update on table "events" violates foreign key constraint "events_entity_event_fkey"/,
         'cannot insert event in wrong entity');
       assert.end();
     });

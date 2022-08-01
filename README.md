@@ -7,13 +7,13 @@ This event store can also be ported to most SQL RDBMS and accessed from any numb
 
 # Postgres Event Store
 
-The [Postgres version](./postgres-event-store.ddl) of SQL event store has the same behavior as the SQLite version. It was built and tested on Postgres 11 but can be ported to earlier versions as needed.
+The [Postgres version](./postgres-event-store.ddl) of SQL event store has the same behavior as the SQLite version. It was built and tested on Postgres 13 but can be used in other versions.
 
 The postgres version can be tested with the [test-postgres.js]() script. Run this file instead of `test-sqlite.js`. It will connect to the postgres server defined in the environment variables, according to [node-postgres](https://node-postgres.com/features/connecting). 
 
 ### Running
 
-One must have Node and NPM installed (Node 10 is what I used) and then:
+One must have Node and NPM installed (Node 16 is what I used) and then:
 
 ```bash
 > npm install
@@ -42,7 +42,7 @@ Appends to other entities do not affect each other, so many events can be append
 - **Append-Only** Once events are created, they cannot be deleted, updated or otherwise modified. This includes entity event definitions.
 - **Insertion-Ordered** Events must be consistently replayable in the order they were inserted.
 - **Event race conditions are Impossible** The event store prevents a client from writing an event to an entity if another event has been inserted after the client has replayed an event stream.
-- **Entity and Event Validation** Event and Entity names cannot be mispelled or misapplied. A client cannot insert an event from the wrong entity. Event and entity names must be defined before use.
+- **Entity and Event Validation** Event and Entity names cannot be misspelled or misapplied. A client cannot insert an event from the wrong entity. Event and entity names must be defined before use.
 
 ### SQL Table Structure
 
@@ -51,25 +51,25 @@ This event store consists of two tables [as described in the DDL](./sqlite-event
 #### `entity_events` Table
 
 | Column   | Notes                 |
-| -------- | --------------------- |
+|----------|-----------------------|
 | `entity` | The entity name.      |
 | `event`  | An entity event name. |
 
-The `entity_events` table controls the entity and event names that can be used in the `events` table itself therough the use of composite foreign keys.
+The `entity_events` table controls the entity and event names that can be used in the `events` table itself through the use of composite foreign keys.
 
 #### `events` Table
 
-| Column       | Notes                                                        |
-| ------------ | ------------------------------------------------------------ |
-| `entity`     | The entity name. Part of a composite foreign key to `entity_events`. |
-| `entityKey`  | The business identifier for the entity.                      |
-| `event`      | The event name. Part of a composite foreign key to `entity_events`. |
-| `data`       | The event data. Cannot be `null` but can be an empty string. |
-| `eventId`    | The event ID. This value is used by the next event as it's `previousId` value to guard against a Lost Event problem. |
-| `commandId`  | The command ID causing this event. Database rules ensure a Command ID can only be used once. |
+| Column       | Notes                                                                                                                               |
+|--------------|-------------------------------------------------------------------------------------------------------------------------------------|
+| `entity`     | The entity name. Part of a composite foreign key to `entity_events`.                                                                |
+| `entityKey`  | The business identifier for the entity.                                                                                             |
+| `event`      | The event name. Part of a composite foreign key to `entity_events`.                                                                 |
+| `data`       | The event data. Cannot be `null` but can be an empty string.                                                                        |
+| `eventId`    | The event ID. This value is used by the next event as it's `previousId` value to guard against a Lost Event problem.                |
+| `commandId`  | The command ID causing this event. Database rules ensure a Command ID can only be used once.                                        |
 | `previousId` | The event ID of the immediately-previous event for this entity. If this is the first event for an entity, then omit or send `NULL`. |
-| `ts`         | The timestamp of the event insertion. **AUTOPOPULATES—DO NOT INSERT.** |
-| `sequence`   | Auto-incrementing sequence number. Used to sort the events for replaying in the insertion order. **AUTOPOPULATES—DO NOT INSERT.** |
+| `ts`         | The timestamp of the event insertion. **AUTOPOPULATES—DO NOT INSERT.**                                                              |
+| `sequence`   | Auto-incrementing sequence number. Used to sort the events for replaying in the insertion order. **AUTOPOPULATES—DO NOT INSERT.**   |
 
 The `events` table is designed to allow multiple concurrent, uncoordinated writers to safely create events. It expects the client to know the difference between an entity's first event and subsequent events.
 
@@ -77,7 +77,7 @@ Multiple constraints are applied to this table to ensure bad events do not make 
 
 ### Client Use Cases
 
-Event store clients can use basic SQL statements to add and replay events. These use cases start with the first—[Insert Entity Event Definitions](#insert-entity-event-definitions)—to set up the database for individual event instances. Thereafter clients follow the typical event sourcing pattern:
+Event store clients can use basic SQL statements to add and replay events. These use cases start with the first—[Insert Entity Event Definitions](#insert-entity-event-definitions)—to set up the database for individual event instances. Thereafter, clients follow the typical event sourcing pattern:
 
 1. Receive a command
 2. [Replay events](#replay-events) to compute current state

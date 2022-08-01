@@ -27,14 +27,14 @@ CREATE OR REPLACE RULE ignore_update_entity_events AS ON UPDATE TO entity_events
 
 CREATE TABLE events
 (
-    entity     TEXT     NOT NULL,
-    entitykey  TEXT     NOT NULL,
-    event      TEXT     NOT NULL,
-    data       JSONB    NOT NULL,
-    eventid    UUID     NOT NULL UNIQUE,
-    commandid  UUID     NOT NULL UNIQUE,
-    -- previous event uuid; null for first event; null does not trigger UNIQUE constraint??
-    previousid UUID     UNIQUE,
+    entity     TEXT        NOT NULL,
+    entitykey  TEXT        NOT NULL,
+    event      TEXT        NOT NULL,
+    data       JSONB       NOT NULL,
+    eventid    UUID        NOT NULL UNIQUE,
+    commandid  UUID        NOT NULL UNIQUE,
+    -- previous event uuid; null for first event; null does not trigger UNIQUE constraint
+    previousid UUID        UNIQUE,
     timestamp  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     -- ordering sequence
     sequence   BIGSERIAL PRIMARY KEY, -- sequence for all events in all entities
@@ -56,10 +56,10 @@ CREATE OR REPLACE FUNCTION check_first_event_for_entity() RETURNS trigger AS
 $$
 BEGIN
     IF (NEW.previousid IS NULL
-        AND EXISTS(SELECT 1
-                   FROM events
-                   WHERE NEW.entitykey = entitykey
-                     AND NEW.entity = entity))
+        AND EXISTS (SELECT 1
+                    FROM events
+                    WHERE NEW.entitykey = entitykey
+                      AND NEW.entity = entity))
     THEN
         RAISE EXCEPTION 'previousid can only be null for first entity event';
 END IF;
@@ -82,11 +82,11 @@ CREATE OR REPLACE FUNCTION check_previousid_in_same_entity() RETURNS trigger AS
 $$
 BEGIN
     IF (NEW.previousid IS NOT NULL
-        AND NOT EXISTS(SELECT 1
-                       FROM events
-                       WHERE NEW.previousid = eventid
-                         AND NEW.entitykey = entitykey
-                         AND NEW.entity = entity))
+        AND NOT EXISTS (SELECT 1
+                        FROM events
+                        WHERE NEW.previousid = eventid
+                          AND NEW.entitykey = entitykey
+                          AND NEW.entity = entity))
     THEN
         RAISE EXCEPTION 'previousid must be in the same entity';
 END IF;
