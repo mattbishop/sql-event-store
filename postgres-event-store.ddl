@@ -31,10 +31,9 @@ CREATE TABLE events
     entitykey  TEXT        NOT NULL,
     event      TEXT        NOT NULL,
     data       JSONB       NOT NULL,
-    eventid    UUID        NOT NULL UNIQUE,
     commandid  UUID        NOT NULL UNIQUE,
     -- previous event uuid; null for first event; null does not trigger UNIQUE constraint
-    previousid UUID        UNIQUE,
+    previousSequence BIGINT UNIQUE,
     timestamp  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     -- ordering sequence
     sequence   BIGSERIAL PRIMARY KEY, -- sequence for all events in all entities
@@ -51,17 +50,17 @@ CREATE OR REPLACE RULE ignore_update_events AS ON UPDATE TO events
     DO INSTEAD NOTHING;
 
 
--- Can only use null previousId for first event in an entity
+-- Can only use null previousSequence for first event in an entity
 CREATE OR REPLACE FUNCTION check_first_event_for_entity() RETURNS trigger AS
 $$
 BEGIN
-    IF (NEW.previousid IS NULL
+    IF (NEW.previousSequence IS NULL
         AND EXISTS (SELECT 1
                     FROM events
                     WHERE NEW.entitykey = entitykey
                       AND NEW.entity = entity))
     THEN
-        RAISE EXCEPTION 'previousid can only be null for first entity event';
+        RAISE EXCEPTION 'previousSequence can only be null for first entity event';
 END IF;
 RETURN NEW;
 END;
@@ -77,27 +76,53 @@ CREATE TRIGGER first_event_for_entity
 
 
 
--- previousId must be in the same entity as the event
-CREATE OR REPLACE FUNCTION check_previousid_in_same_entity() RETURNS trigger AS
+-- previousSequence must be in the same entity as the event
+CREATE OR REPLACE FUNCTION check_previousSequence_in_same_entity()
+RETURNS trigger AS
 $$
 BEGIN
-    IF (NEW.previousid IS NOT NULL
-        AND NOT EXISTS (SELECT 1
-                        FROM events
-                        WHERE NEW.previousid = eventid
-                          AND NEW.entitykey = entitykey
-                          AND NEW.entity = entity))
+    IF (NEW.previousSequence IS NOT NULL
+        AND NEW.previousSequence != (
+                SELECT sequence FROM events
+                    WHERE NEW.entitykey = entitykey
+                        AND NEW.entity = entity
+                    ORDER BY sequence DESC
+                    LIMIT 1
+             )
+    )
     THEN
-        RAISE EXCEPTION 'previousid must be in the same entity';
-END IF;
-RETURN NEW;
+        RAISE EXCEPTION 'previousSequence must be the last entry of the event stream for the same entity';
+    END IF;
+    RETURN NEW;
 END;
 $$
-    LANGUAGE plpgsql;
+LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS previousid_in_same_entity ON events;
-CREATE TRIGGER previousid_in_same_entity
+DROP TRIGGER IF EXISTS previousSequence_in_same_entity ON events;
+CREATE TRIGGER previousSequence_in_same_entity
     BEFORE INSERT
     ON events
     FOR EACH ROW
-    EXECUTE FUNCTION check_previousid_in_same_entity();
+    EXECUTE FUNCTION check_previousSequence_in_same_entity();
+
+
+
+
+truncate events;
+truncate entity_events cascade;
+ALTER SEQUENCE events_sequence_seq RESTART WITH 1;
+
+-- INSERT INTO entity_events (entity, event) VALUES ('thing', 'thing-created');
+-- INSERT INTO entity_events (entity, event) VALUES ('thing', 'thing-deleted');
+
+-- INSERT INTO entity_events (entity, event) VALUES ('table-tennis', 'ball-pinged');
+-- INSERT INTO entity_events (entity, event) VALUES ('table-tennis', 'ball-ponged');
+
+-- INSERT INTO events (entity, entityKey, event, data, commandId, previousSequence) VALUES ('table-tennis', 'home', 'ball-pinged', '{}', '00000000-0000-0000-0000-000000000000', null);
+-- INSERT INTO events (entity, entityKey, event, data, commandId, previousSequence) VALUES ('table-tennis', 'home', 'ball-ponged', '{}', '00000000-0000-0000-0000-000000000001', 1);
+-- INSERT INTO events (entity, entityKey, event, data, commandId, previousSequence) VALUES ('table-tennis', 'home', 'ball-ponged', '{}', '00000000-0000-0000-0000-000000000002', 2);
+
+-- INSERT INTO events (entity, entityKey, event, data, commandId, previousSequence) VALUES ('table-tennis', 'work', 'ball-pinged', '{}', '00000000-0000-0000-0000-000000000003', null);
+-- INSERT INTO events (entity, entityKey, event, data, commandId, previousSequence) VALUES ('table-tennis', 'work', 'ball-ponged', '{}', '00000000-0000-0000-0000-000000000004', 4);
+-- INSERT INTO events (entity, entityKey, event, data, commandId, previousSequence) VALUES ('table-tennis', 'work', 'ball-ponged', '{}', '00000000-0000-0000-0000-000000000005', 5);
+

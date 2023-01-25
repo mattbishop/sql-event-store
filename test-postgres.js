@@ -17,7 +17,14 @@ const pingEvent = 'ball-pinged';
 const pongEvent = 'ball-ponged';
 
 async function initDb() {
-  const db = new pg.Client()
+  const conf = {
+    user: 'admin',
+    password: 'admin',
+    host: 'localhost',
+    database: 'eventstoretest',
+    port: 5432
+  }
+  const db = new pg.Client(conf)
   db.connect()
   await loadDdl(db);
   return db;
@@ -30,6 +37,15 @@ async function loadDdl(db) {
 
 async function shutdownDb(db) {
   await db.end();
+}
+
+async function lastSequenceOf(db, entity, entityKey) {
+  // Create the sql to get the last sequence number for the entity
+  const lastSequence = 'SELECT sequence FROM events WHERE entity = $1 AND entitykey = $2 ORDER BY sequence DESC LIMIT 2';
+  const res = await db.query(lastSequence, [entity, entityKey])
+  console.log(res.rows[0])
+  return res;
+  // { name: 'brianc', email: 'brian.m.carlson@gmail.com' }
 }
 
 // use t.plan() for async testing too.
@@ -78,15 +94,13 @@ test('setup', async setup => {
   });
 
   setup.test('insert events', t => {
-    const stmt = 'INSERT INTO events (entity, entityKey, event, data, eventId, commandId, previousId) VALUES ($1, $2, $3, $4, $5, $6, $7)';
+    const stmt = 'INSERT INTO events (entity, entityKey, event, data, commandId, previousSequence) VALUES ($1, $2, $3, $4, $5, $6)';
     const thingKey = '1';
     const homeTableKey = 'home';
     const workTableKey = 'work';
 
     const commandId1 = uuid.v4();
     const commandId2 = uuid.v4();
-    const thingEventId1 = uuid.v4();
-    const thingEventId2 = uuid.v4();
 
     const pingEventHomeId = uuid.v4();
     const pingEventWorkId = uuid.v4();
@@ -96,27 +110,23 @@ test('setup', async setup => {
 
     t.test('cannot insert empty columns', async assert => {
       await assert.rejects(
-        () => db.query(stmt, [null, thingKey, thingCreatedEvent, data, thingEventId1, commandId1, null]),
+        () => db.query(stmt, [null, thingKey, thingCreatedEvent, data, commandId1, null]),
         /error: null value in column "entity" of relation "events" violates not-null constraint/,
         'cannot insert null entity');
       await assert.rejects(
-        () => db.query(stmt, [thingEntity, null, thingCreatedEvent, data, thingEventId1, commandId1, null]),
+        () => db.query(stmt, [thingEntity, null, thingCreatedEvent, data, commandId1, null]),
         /error: null value in column "entitykey" of relation "events" violates not-null constraint/,
         'cannot insert null entity key');
       await assert.rejects(
-        () => db.query(stmt, [thingEntity, thingKey, null, data, thingEventId1, commandId1, null]),
+        () => db.query(stmt, [thingEntity, thingKey, null, data, commandId1, null]),
         /error: null value in column "event" of relation "events" violates not-null constraint/,
         'cannot insert null event');
       await assert.rejects(
-        () => db.query(stmt, [thingEntity, thingKey, thingCreatedEvent, null, thingEventId1, commandId1, null]),
+        () => db.query(stmt, [thingEntity, thingKey, thingCreatedEvent, null, commandId1, null]),
         /error: null value in column "data" of relation "events" violates not-null constraint/,
         'cannot insert null event data');
       await assert.rejects(
-        () => db.query(stmt, [thingEntity, thingKey, thingCreatedEvent, data, null, commandId1, null]),
-        /error: null value in column "eventid" of relation "events" violates not-null constraint/,
-        'cannot insert null event id');
-      await assert.rejects(
-        () => db.query(stmt, [thingEntity, thingKey, thingCreatedEvent, data, thingEventId1, null, null]),
+        () => db.query(stmt, [thingEntity, thingKey, thingCreatedEvent, data, null, null]),
         /error: null value in column "commandid" of relation "events" violates not-null constraint/,
         'cannot insert null command');
       assert.end();
@@ -124,11 +134,7 @@ test('setup', async setup => {
 
     t.test('UUIDs format for IDs', async assert => {
       await assert.rejects(
-        () => db.query(stmt, [thingEntity, thingKey, thingCreatedEvent, data, 'not-a-uuid', commandId1, null]),
-        /error: invalid input syntax for type uuid: "not-a-uuid"/,
-        'eventId must be a UUID');
-      await assert.rejects(
-        () => db.query(stmt, [thingEntity, thingKey, thingCreatedEvent, data, thingEventId1, 'not-a-uuid', null]),
+        () => db.query(stmt, [thingEntity, thingKey, thingCreatedEvent, data, 'not-a-uuid', null]),
         /error: invalid input syntax for type uuid: "not-a-uuid"/,
         'commandId must be a UUID');
       assert.end();
@@ -136,49 +142,82 @@ test('setup', async setup => {
 
     t.test('Cannot insert event from wrong entity', async assert => {
       await assert.rejects(
-        () => db.query(stmt, [tableTennisEntity, thingKey, thingCreatedEvent, data, thingEventId1, commandId1, null]),
+        () => db.query(stmt, [tableTennisEntity, thingKey, thingCreatedEvent, data, commandId1, null]),
         /error: insert or update on table "events" violates foreign key constraint "events_entity_event_fkey"/,
         'cannot insert event in wrong entity');
       assert.end();
     });
 
     t.test('insert events for an entity', async assert => {
-      await assert.doesNotReject(() => db.query(stmt, [thingEntity, thingKey, thingCreatedEvent, data, thingEventId1, commandId1, null]));
-      await assert.doesNotReject(() => db.query(stmt, [thingEntity, thingKey, thingDeletedEvent, data, thingEventId2, commandId2, thingEventId1]));
-      await assert.doesNotReject(() => db.query(stmt, [tableTennisEntity, homeTableKey, pingEvent, data, pingEventHomeId, uuid.v4(), null]));
-      await assert.doesNotReject(() => db.query(stmt, [tableTennisEntity, workTableKey, pingEvent, data, pingEventWorkId, uuid.v4(), null]));
+      await assert.doesNotReject(() => db.query(stmt, [thingEntity, thingKey, thingCreatedEvent, data, commandId1, null]));
+      await assert.doesNotReject(() => {
+        let res = lastSequenceOf(db, thingEntity, thingKey)
+        return res.then(r => {
+          return db.query(stmt, [thingEntity, thingKey, thingDeletedEvent, data, commandId2, r.rows[0].sequence])
+        });
+      });
+      await assert.doesNotReject(() => db.query(stmt, [tableTennisEntity, homeTableKey, pingEvent, data, uuid.v4(), null]));
+      await assert.doesNotReject(() => db.query(stmt, [tableTennisEntity, workTableKey, pingEvent, data, uuid.v4(), null]));
       assert.end();
     });
 
-    t.test('previousId rules', async assert => {
+    t.test('previousSequence rules', async assert => {
       await assert.rejects(
-        () => db.query(stmt, [tableTennisEntity, homeTableKey, pingEvent, data, pingEventHomeId, uuid.v4(), null]),
-        /error: previousid can only be null for first entity event/,
-        'cannot insert multiple null previousid for an entity');
+        () => db.query(stmt, [tableTennisEntity, homeTableKey, pingEvent, data, uuid.v4(), null]),
+        /error: previousSequence can only be null for first entity event/,
+        'cannot insert multiple null previousSequence for an entity');
+      await assert.rejects( 
+        () => {
+          let res = lastSequenceOf(db, tableTennisEntity, homeTableKey)
+          return res.then(r => {
+            return db.query(stmt, [tableTennisEntity, workTableKey, pongEvent, data, uuid.v4(), r.rows[0].sequence])
+          });
+        },
+        /error: previousSequence must be the last entry of the event stream for the same entity/,
+        'previousSequence must be in same entity 1');
       await assert.rejects(
-        () => db.query(stmt, [tableTennisEntity, workTableKey, pongEvent, data, uuid.v4(), uuid.v4(), pingEventHomeId]),
-        /error: previousid must be in the same entity/,
-        'previousid must be in same entity');
+        () => {
+          let res = lastSequenceOf(db, thingEntity, thingKey)
+          return res.then(r => {
+            return db.query(stmt, [tableTennisEntity, workTableKey, pongEvent, data, uuid.v4(), r.rows[0].sequence])
+          });
+        },
+        /error: previousSequence must be the last entry of the event stream for the same entity/,
+        'previousSequence must be in same entity 2');
+      await assert.rejects(
+        () => db.query(stmt, [tableTennisEntity, workTableKey, pongEvent, data, uuid.v4(), 3]),
+        /error: previousSequence must be the last entry of the event stream for the same entity/,
+        'previousSequence must be in same entity 3');
+      await assert.doesNotReject(
+        () => {
+          let res = lastSequenceOf(db, tableTennisEntity, workTableKey)
+          return res.then(r => {
+            return db.query(stmt, [tableTennisEntity, workTableKey, pongEvent, data, uuid.v4(), r.rows[0].sequence])
+          });
+        }),
       assert.end();
     });
 
     t.test('Cannot insert duplicates', async assert => {
       await assert.rejects(
-        () => db.query(stmt, [thingEntity, thingKey, thingCreatedEvent, data, thingEventId2, commandId2, thingEventId1]),
-        /error: duplicate key value violates unique constraint "events_eventid_key"/,
-        'cannot insert complete duplicate event');
-      await assert.rejects(
-        () => db.query(stmt, [tableTennisEntity, homeTableKey, pongEvent, data, pingEventHomeId, uuid.v4(), pingEventHomeId]),
-        /error: duplicate key value violates unique constraint "events_eventid_key"/,
-        'cannot insert different event for same id');
-      await assert.rejects(
-        () => db.query(stmt, [thingEntity, thingKey, thingDeletedEvent, data, uuid.v4(), commandId1, thingEventId2]),
+        () => {
+          let res = lastSequenceOf(db, thingEntity, thingKey)
+          return res.then(r => {
+            return db.query(stmt, [thingEntity, thingKey, thingDeletedEvent, data, commandId2, r.rows[0].sequence])
+          });
+        },
         /error: duplicate key value violates unique constraint "events_commandid_key"/,
         'cannot insert different event for same command');
-      await assert.rejects(
-        () => db.query(stmt, [thingEntity, thingKey, thingDeletedEvent, data, uuid.v4(), uuid.v4(), thingEventId1]),
-        /error: duplicate key value violates unique constraint "events_previousid_key"/,
-        'cannot insert different event for same previous');
+        await assert.rejects(
+          () => {
+            let res = lastSequenceOf(db, thingEntity, thingKey)
+            return res.then(async r => {
+              let previousPreviousId = r.rows[1].sequence;
+              return db.query(stmt, [thingEntity, thingKey, thingDeletedEvent, data, uuid.v4(), previousPreviousId])  
+            });
+          },
+          /error: previousSequence must be the last entry of the event stream for the same entity/,
+          'cannot insert different event for same previous');
       assert.end();
     });
   });
