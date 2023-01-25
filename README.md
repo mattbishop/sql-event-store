@@ -1,4 +1,5 @@
 # SQL Event Store
+
 Demonstration of a SQL event store with deduplication and guaranteed event ordering. The database rules are intended to prevent incorrect information from entering into an event stream. You are assumed to have familiarity with [event sourcing](https://martinfowler.com/eaaDev/EventSourcing.html).
 
 This project uses a node test suite and SQLite to ensure the DDL complies with the design requirements. This SQLite event store can be used in highly-constrained environments that require an embedded event store, like a mobile device or an IoT system. 
@@ -11,7 +12,7 @@ The [Postgres version](./postgres-event-store.ddl) of SQL event store has the sa
 
 The postgres version can be tested with the [test-postgres.js]() script. Run this file instead of `test-sqlite.js`. It will connect to the postgres server defined in the environment variables, according to [node-postgres](https://node-postgres.com/features/connecting). 
 
-### Running
+### Running SQLite Tests
 
 One must have Node and NPM installed (Node 16 is what I used) and then:
 
@@ -26,6 +27,30 @@ Once it has finished installing the dependencies, run the [tests](test-sqlite.js
 ```
 
 The test uses [sql.js](https://github.com/kripken/sql.js), the pure Javascript port of SQLite for reliable compilation and test execution. The test will dump the test database to `test-event-store.sqlite` for your examination.
+
+### Running PostgreSQL Tests
+
+
+One must have Node and NPM installed (Node 16 is what I used) and then:
+
+```bash
+> npm install
+```
+
+Start a Postgres server and create a database called `eventstoretest`. 
+You can run the docker-compose file in this project to start a Postgres server. 
+
+```bash
+> docker-compose up -d
+```
+
+Once the server is running, run the [tests](test-postgres.js) with:
+
+```bash
+> node test-postgres.js
+```
+
+
 
 ### Conceptual Model
 
@@ -51,7 +76,7 @@ This event store consists of two tables [as described in the DDL](./sqlite-event
 #### `entity_events` Table
 
 | Column   | Notes                 |
-|----------|-----------------------|
+| -------- | --------------------- |
 | `entity` | The entity name.      |
 | `event`  | An entity event name. |
 
@@ -60,7 +85,7 @@ The `entity_events` table controls the entity and event names that can be used i
 #### `events` Table
 
 | Column       | Notes                                                                                                                               |
-|--------------|-------------------------------------------------------------------------------------------------------------------------------------|
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `entity`     | The entity name. Part of a composite foreign key to `entity_events`.                                                                |
 | `entityKey`  | The business identifier for the entity.                                                                                             |
 | `event`      | The event name. Part of a composite foreign key to `entity_events`.                                                                 |

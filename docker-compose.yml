@@ -1,0 +1,18 @@
+# Author: Fabien Sartor.
+# Creation Date: 20/05/2022
+# Copyright: Secheron SA
+
+version: '2.4'
+
+
+services:
+
+  postgres:
+    image: postgres:14.6
+    container_name: 'postgres'
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: eventstoretest
