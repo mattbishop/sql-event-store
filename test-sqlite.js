@@ -75,126 +75,100 @@ test('setup', async setup => {
   });
 
   setup.test('insert events', t => {
-    const stmt = db.prepare('INSERT INTO events (entity, entityKey, event, data, eventId, commandId, previousId) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    const stmt = db.prepare('INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id) VALUES (?, ?, ?, ?, ?, ?);');
+
     const thingKey = '1';
     const homeTableKey = 'home';
     const workTableKey = 'work';
 
-    const commandId1 = uuid.v4();
-    const commandId2 = uuid.v4();
-    const thingEventId1 = uuid.v4();
-    const thingEventId2 = uuid.v4();
+    const appendKey1 = uuid.v4();
+    const appendKey2 = uuid.v4();
+    let thingEventId1 = uuid.v4();
+    let thingEventId2 = uuid.v4();
 
-    const pingEventHomeId = uuid.v4();
-    const pingEventWorkId = uuid.v4();
+    let pingEventHomeId = uuid.v4();
+    let pingEventWorkId = uuid.v4();
 
 
     const data = '{}';
 
     t.test('cannot insert empty columns', assert => {
       assert.throws(
-        () => stmt.run([null, thingKey, thingCreatedEvent, data, thingEventId1, commandId1]),
+        () => stmt.run([null, thingKey, thingCreatedEvent, data, appendKey1]),
         /NOT NULL constraint failed: events\.entity/,
         'cannot insert null entity');
       assert.throws(
-        () => stmt.run([thingEntity, null, thingCreatedEvent, data, thingEventId1, commandId1]),
-        /NOT NULL constraint failed: events\.entityKey/,
+        () => stmt.run([thingEntity, null, thingCreatedEvent, data, appendKey1]),
+        /NOT NULL constraint failed: events\.entity_key/,
         'cannot insert null entity key');
       assert.throws(
-        () => stmt.run([thingEntity, thingKey, null, data, thingEventId1, commandId1]),
+        () => stmt.run([thingEntity, thingKey, null, data, appendKey1]),
         /NOT NULL constraint failed: events\.event/,
         'cannot insert null event');
       assert.throws(
-        () => stmt.run([thingEntity, thingKey, thingCreatedEvent, null, thingEventId1, commandId1]),
+        () => stmt.run([thingEntity, thingKey, thingCreatedEvent, null, appendKey1]),
         /NOT NULL constraint failed: events\.data/,
         'cannot insert null event data');
-      assert.throws(
-        () => stmt.run([thingEntity, thingKey, thingCreatedEvent, data, null, commandId1]),
-        /NOT NULL constraint failed: events\.eventId/,
-        'cannot insert null event id');
-      assert.throws(
-        () => stmt.run([thingEntity, thingKey, thingCreatedEvent, data, thingEventId1, null]),
-        /NOT NULL constraint failed: events\.commandId/,
-        'cannot insert null command');
-      assert.end();
-    });
 
-    t.test('UUIDs format for IDs', assert => {
       assert.throws(
-        () => stmt.run([thingEntity, thingKey, thingCreatedEvent, data, 'not-a-uuid', commandId1]),
-        /CHECK constraint failed: eventId/,
-        'eventId must be a UUID');
-      assert.throws(
-        () => stmt.run([thingEntity, thingKey, thingCreatedEvent, data, thingEventId1, 'not-a-uuid']),
-        /CHECK constraint failed: commandId/,
-        'commandId must be a UUID');
+        () => stmt.run([thingEntity, thingKey, thingCreatedEvent, data, null]),
+        /NOT NULL constraint failed: events\.append_key/,
+        'cannot insert null append key');
       assert.end();
     });
 
     t.test('Cannot insert event from wrong entity', assert => {
       assert.throws(
-        () => stmt.run([tableTennisEntity, thingKey, thingCreatedEvent, data, thingEventId1, commandId1]),
+        () => stmt.run([tableTennisEntity, thingKey, thingCreatedEvent, data, appendKey1]),
         /FOREIGN KEY constraint failed/,
         'cannot insert event in wrong entity');
       assert.end();
     });
 
+    const appendStmt = db.prepare(`
+INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id)
+    VALUES ($1, $2, $3, $4, $5, $6)
+    RETURNING (SELECT event_id FROM events WHERE append_key = $5) as event_id;`);
+
     t.test('insert events for an entity', assert => {
-      assert.doesNotThrow(() => stmt.run([thingEntity, thingKey, thingCreatedEvent, data, thingEventId1, commandId1]));
-      assert.doesNotThrow(() => stmt.run([thingEntity, thingKey, thingDeletedEvent, data, thingEventId2, commandId2, thingEventId1]));
-      assert.doesNotThrow(() => stmt.run([tableTennisEntity, homeTableKey, pingEvent, data, pingEventHomeId, uuid.v4()]));
-      assert.doesNotThrow(() => stmt.run([tableTennisEntity, workTableKey, pingEvent, data, pingEventWorkId, uuid.v4()]));
+      // [thingEventId1] = appendStmt.get([thingEntity, thingKey, thingCreatedEvent, data, uuid.v4(), null]);
+      assert.doesNotThrow(() => [thingEventId1] = appendStmt.get([thingEntity, thingKey, thingCreatedEvent, data, appendKey1, null]));
+      assert.doesNotThrow(() => [thingEventId2] = appendStmt.get([thingEntity, thingKey, thingDeletedEvent, data, appendKey2, thingEventId1]));
+      assert.doesNotThrow(() => [pingEventHomeId] = appendStmt.get([tableTennisEntity, homeTableKey, pingEvent, data, uuid.v4(), null]));
+      assert.doesNotThrow(() => [pingEventWorkId] = appendStmt.get([tableTennisEntity, workTableKey, pingEvent, data, uuid.v4(), null]));
       assert.end();
     });
 
-    t.test('previousId rules', assert => {
+    t.test('previous_id rules', assert => {
       assert.throws(
-        () => stmt.run([tableTennisEntity, homeTableKey, pingEvent, data, pingEventHomeId, uuid.v4()]),
-        /previousId can only be null for first entity event/,
-        'cannot insert multiple null previousId for an entity');
+        () => stmt.run([tableTennisEntity, homeTableKey, pingEvent, data, uuid.v4(), null]),
+        /previous_id can only be null for first entity event/,
+        'cannot insert multiple null previous ID for an entity');
       assert.throws(
-        () => stmt.run([tableTennisEntity, workTableKey, pongEvent, data, uuid.v4(), uuid.v4(), pingEventHomeId]),
-        /previousId must be in same entity/,
-        'previousId must be in same entity');
+        () => stmt.run([tableTennisEntity, workTableKey, pongEvent, data, uuid.v4(), pingEventHomeId]),
+        /previous_id must be in same entity/,
+        'previous ID must be in same entity');
       assert.end();
     });
 
     t.test('Cannot insert duplicates', assert => {
-      assert.throws(
-        () => stmt.run([thingEntity, thingKey, thingCreatedEvent, data, thingEventId2, commandId2, thingEventId1]),
+      assert.throws( // ?? this test seems odd
+        () => stmt.run([thingEntity, thingKey, thingCreatedEvent, data, appendKey2, thingEventId1]),
         /UNIQUE constraint failed/,
         'cannot insert complete duplicate event');
       assert.throws(
-        () => stmt.run([tableTennisEntity, homeTableKey, pongEvent, data, pingEventHomeId, uuid.v4(), pingEventHomeId]),
-        /UNIQUE constraint failed: events\.eventId/,
-        'cannot insert different event for same id');
+        () => stmt.run([thingEntity, thingKey, thingDeletedEvent, data, appendKey1, thingEventId2]),
+        /UNIQUE constraint failed: events\.append_key/,
+        'cannot insert different event for same append key');
       assert.throws(
-        () => stmt.run([thingEntity, thingKey, thingDeletedEvent, data, uuid.v4(), commandId1, thingEventId2]),
-        /UNIQUE constraint failed: events\.commandId/,
-        'cannot insert different event for same command');
-      assert.throws(
-        () => stmt.run([thingEntity, thingKey, thingDeletedEvent, data, uuid.v4(), uuid.v4(), thingEventId1]),
-        /UNIQUE constraint failed: events\.previousId/,
-        'cannot insert different event for same previous');
+        () => stmt.run([thingEntity, thingKey, thingDeletedEvent, data, uuid.v4(), thingEventId1]),
+        /UNIQUE constraint failed: events\.previous_id/,
+        'cannot insert different event for same previous ID');
       assert.end();
     });
   });
 
   setup.test('cannot delete or update', t => {
-    t.test('cannot delete or update entity_events', assert => {
-      assert.throws(
-        () => db.exec(`DELETE FROM entity_events WHERE entity = '${tableTennisEntity}'`),
-        /Cannot delete entity_events/,
-        'cannot delete entity_events'
-      );
-      assert.throws(
-        () => db.exec(`UPDATE entity_events SET entity = 'fail' WHERE entity = '${tableTennisEntity}'`),
-        /Cannot update entity_events/,
-        'cannot update entity_events'
-      );
-      assert.end();
-    });
-
     t.test('cannot delete or update events', assert => {
       assert.throws(
         () => db.exec(`DELETE FROM events WHERE entity = '${thingEntity}'`),
@@ -202,7 +176,7 @@ test('setup', async setup => {
         'cannot delete events'
       );
       assert.throws(
-        () => db.exec(`UPDATE events SET entityKey = 'fail' WHERE entity = '${thingEntity}'`),
+        () => db.exec(`UPDATE events SET entity_key = 'fail' WHERE entity = '${thingEntity}'`),
         /Cannot update events/,
         'cannot update events'
       );

@@ -3,7 +3,48 @@ Demonstration of a SQL event store with deduplication and guaranteed event order
 
 This project uses a node test suite and SQLite to ensure the DDL complies with the design requirements. This SQLite event store can be used in highly-constrained environments that require an embedded event store, like a mobile device or an IoT system. 
 
-This event store can also be ported to most SQL RDBMS and accessed from any number of writers, including high-load serverless functions, without a coordinating “single writer” process. The project includes a Postgres version of the DDL.
+This event store can also be ported to most SQL RDBMS and accessed from any number of writers, including high-load serverless functions, without a coordinating “single writer” process. The project includes both a SQLite and Postgres version of the DDL, including tests.
+
+# SQLite Event Store
+
+The [SQLite version](./sqlite-event-store.ddl) of SQL event store was built and tested with SQLite 3.49; it should run on recent versions of SQLite, at least since 2023.
+
+### Running Tests
+
+One must have Node installed (Node 22 is what I used) and then:
+
+```bash
+> npm install
+```
+
+Once it has finished installing the dependencies, run the [tests](test-sqlite.js) with:
+
+```bash
+> node test-sqlite.js
+```
+
+The test uses [sql.js](https://github.com/kripken/sql.js), the pure Javascript port of SQLite for reliable compilation and test execution. The test will dump the test database to `test-event-store.sqlite` for your examination.
+
+### Appending Events
+
+In order to manage the business rules of an Event Store, one must append events by inserting into the `append_event` view. Here is an example:
+
+```sqlite
+-- first, add an event type
+INSERT INTO entity_events (entity, event) VALUES ('game', 'game started');
+
+-- then add an event. Note the RETURNING clause, which returns the generated event_id for the appended event. This is used to append the next event.
+INSERT INTO append_event (entity, entity_key, event, data, append_key)
+VALUES ('game', 'apr-7-2025', 'game started','true', 'an append key')
+RETURNING (SELECT event_id FROM events WHERE append_key = '12345678') as eventId;
+
+-- now insert another event
+INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id)
+VALUES ('game', 'apr-7-2025', 'game going','true', 'another-append-key', '019612a6-38ac-7108-85fd-33e8081cedaf')
+RETURNING (SELECT event_id FROM events WHERE append_key = 'another-append-key') as eventId;
+```
+
+
 
 # Postgres Event Store
 
@@ -59,17 +100,17 @@ The `entity_events` table controls the entity and event names that can be used i
 
 #### `events` Table
 
-| Column       | Notes                                                                                                                               |
-|--------------|-------------------------------------------------------------------------------------------------------------------------------------|
-| `entity`     | The entity name. Part of a composite foreign key to `entity_events`.                                                                |
-| `entityKey`  | The business identifier for the entity.                                                                                             |
-| `event`      | The event name. Part of a composite foreign key to `entity_events`.                                                                 |
-| `data`       | The event data. Cannot be `null` but can be an empty string.                                                                        |
-| `eventId`    | The event ID. This value is used by the next event as it's `previousId` value to guard against a Lost Event problem.                |
-| `commandId`  | The command ID causing this event. Database rules ensure a Command ID can only be used once.                                        |
+| Column       | Notes                                                        |
+| ------------ | ------------------------------------------------------------ |
+| `entity`     | The entity name. Part of a composite foreign key to `entity_events`. |
+| `entityKey`  | The business identifier for the entity.                      |
+| `event`      | The event name. Part of a composite foreign key to `entity_events`. |
+| `data`       | The event data. Cannot be `null` but can be an empty string. |
+| `eventId`    | The event ID. This value is used by the next event as it's `previousId` value to guard against a Lost Event problem. **AUTOPOPULATES—DO NOT INSERT.** |
+| `appendKey`  | The append key from the client. Database rules ensure an append key can only be used once. Can be a Command ID, or another client-generated unique key for the event append action. Useful for idempotent appends. |
 | `previousId` | The event ID of the immediately-previous event for this entity. If this is the first event for an entity, then omit or send `NULL`. |
-| `ts`         | The timestamp of the event insertion. **AUTOPOPULATES—DO NOT INSERT.**                                                              |
-| `sequence`   | Auto-incrementing sequence number. Used to sort the events for replaying in the insertion order. **AUTOPOPULATES—DO NOT INSERT.**   |
+| `ts`         | The timestamp of the event insertion. **AUTOPOPULATES—DO NOT INSERT.** |
+| `sequence`   | Auto-incrementing sequence number. Used to sort the events for replaying in the insertion order. **AUTOPOPULATES—DO NOT INSERT.** |
 
 The `events` table is designed to allow multiple concurrent, uncoordinated writers to safely create events. It expects the client to know the difference between an entity's first event and subsequent events.
 
@@ -110,7 +151,7 @@ FROM events
 ORDER BY sequence;
 ```
 
-If a command produces a subsequent event for an existing entity, the `eventId` of the last event must be used as the `previousId` of the next event.
+If a command produces a subsequent event for an existing entity, the `eventId` of the last event must be used as the `previousId` of the next event. This design enforces the Event Sourcing pattern of building current read models before appending new events for an entity.
 
 #### Append Events
 
@@ -121,13 +162,12 @@ Two types of events can be appended into the event log. The first event for an e
 In this case, the `previousId` does not exist, so it is omitted from the insert statement.
 
 ```sql
-INSERT INTO events(entity, 
-                   entityKey, 
-                   event, 
-                   data, 
-                   eventId, 
-                   commandId) 
-                   VALUES (?, ?, ?, ?, ?, ?);
+INSERT INTO events(entity,
+                   entityKey,
+                   event,
+                   data,
+                   appendKey) 
+                   VALUES (?, ?, ?, ?, ?);
 ```
 
 ##### Subsequent Events
@@ -135,13 +175,12 @@ INSERT INTO events(entity,
 The `previousId` is the `eventId` of the last event recorded for the entity.
 
 ```sql
-INSERT INTO events(entity, 
-                   entityKey, 
-                   event, 
-                   data, 
-                   eventId, 
-                   commandId, 
+INSERT INTO events(entity,
+                   entityKey,
+                   event,
+                   data,
+                   appendKey,
                    previousId) 
-                   VALUES (?, ?, ?, ?, ?, ?, ?);
+                   VALUES (?, ?, ?, ?, ?, ?);
 ```
 

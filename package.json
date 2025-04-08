@@ -1,6 +1,6 @@
 {
   "name": "sql-event-store",
-  "version": "1.0.2",
+  "version": "2.0.0",
   "description": "Demonstration of a SQL event store with de-duplication and guaranteed ordering. This event store can be ported to most SQL RDBMS and accessed from an number of writers, including high-load serverless functions. ",
   "main": "test-sqlite.js",
   "scripts": {
@@ -26,9 +26,9 @@
   "homepage": "https://github.com/mattbishop/sql-event-store#readme",
   "dependencies": {
     "pg": "^8.7.3",
-    "sql.js": "^1.7.0",
-    "tape": "^5.5.3",
+    "sql.js": "^1.13.0",
+    "tape": "^5.9.0",
     "tape-promise": "^4.0.0",
-    "uuid": "^8.3.2"
+    "uuid": "^11.1.0"
   }
 }
