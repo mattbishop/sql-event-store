@@ -41,38 +41,6 @@ test('setup', async setup => {
     t.end();
   });
 
-  setup.test('insert entity_events', t => {
-
-    const stmt = db.prepare('INSERT INTO entity_events (entity, event) VALUES (?, ?)');
-
-    t.test('cannot insert null fields', assert => {
-      assert.throws(
-        () => stmt.run([null, thingCreatedEvent]),
-        /Error: NOT NULL constraint failed: entity_events\.entity/,
-        'cannot insert null entity');
-      assert.throws(
-        () => stmt.run([thingEntity, null]),
-        /Error: NOT NULL constraint failed: entity_events\.event/,
-        'cannot insert null entity');
-      assert.end();
-    });
-
-    t.test('insert entity_events', assert => {
-      assert.doesNotThrow(() => stmt.run([thingEntity, thingCreatedEvent]));
-      assert.doesNotThrow(() => stmt.run([thingEntity, thingDeletedEvent]));
-      assert.doesNotThrow(() => stmt.run([tableTennisEntity, pingEvent]));
-      assert.doesNotThrow(() => stmt.run([tableTennisEntity, pongEvent]));
-      assert.end();
-    });
-
-    t.test('insert duplicate entity events does not throw an Error', assert => {
-      assert.doesNotThrow(() => stmt.run([thingEntity, thingCreatedEvent]));
-      assert.doesNotThrow(() => stmt.run([thingEntity, thingCreatedEvent]));
-      const result = db.exec(`SELECT COUNT(*) FROM entity_events WHERE entity = '${thingEntity}' AND event = '${thingCreatedEvent}'`);
-      assert.equal(result[0].values[0][0], 1);
-      assert.end();
-    });
-  });
 
   setup.test('insert events', t => {
     const stmt = db.prepare('INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id) VALUES (?, ?, ?, ?, ?, ?);');
@@ -117,13 +85,6 @@ test('setup', async setup => {
       assert.end();
     });
 
-    t.test('Cannot insert event from wrong entity', assert => {
-      assert.throws(
-        () => stmt.run([tableTennisEntity, thingKey, thingCreatedEvent, data, appendKey1]),
-        /FOREIGN KEY constraint failed/,
-        'cannot insert event in wrong entity');
-      assert.end();
-    });
 
     const appendStmt = db.prepare(`
 INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id)

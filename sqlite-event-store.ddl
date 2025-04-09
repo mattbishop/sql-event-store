@@ -2,14 +2,6 @@
 PRAGMA foreign_keys = ON;
 
 DROP TABLE IF EXISTS events;
-DROP TABLE IF EXISTS entity_events;
-
-CREATE TABLE entity_events
-(
-    entity TEXT NOT NULL,
-    event  TEXT NOT NULL,
-    PRIMARY KEY (entity, event) ON CONFLICT IGNORE
-);
 
 
 CREATE TABLE events
@@ -24,8 +16,7 @@ CREATE TABLE events
     append_key  TEXT NOT NULL UNIQUE,
     -- previous event uuid
     -- null for first event in entity instance; null does not trigger UNIQUE constraint
-    previous_id TEXT UNIQUE,
-    FOREIGN KEY (entity, event) REFERENCES entity_events (entity, event)
+    previous_id TEXT UNIQUE
 );
 
 CREATE INDEX entity_index ON events (entity_key, entity);
