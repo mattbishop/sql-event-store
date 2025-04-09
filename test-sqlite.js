@@ -4,7 +4,7 @@
 const test = require('tape');
 const fs = require('fs');
 const initSqlJs = require('sql.js');
-const uuid = require('uuid');
+const nanoid = require('nanoid').nanoid;
 
 const thingEntity = 'thing';
 const thingCreatedEvent = 'thing-created';
@@ -81,13 +81,13 @@ test('setup', async setup => {
     const homeTableKey = 'home';
     const workTableKey = 'work';
 
-    const appendKey1 = uuid.v4();
-    const appendKey2 = uuid.v4();
-    let thingEventId1 = uuid.v4();
-    let thingEventId2 = uuid.v4();
+    const appendKey1 = nanoid();
+    const appendKey2 = nanoid();
+    let thingEventId1 = nanoid();
+    let thingEventId2 = nanoid();
 
-    let pingEventHomeId = uuid.v4();
-    let pingEventWorkId = uuid.v4();
+    let pingEventHomeId = nanoid();
+    let pingEventWorkId = nanoid();
 
 
     const data = '{}';
@@ -131,21 +131,20 @@ INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_
     RETURNING (SELECT event_id FROM events WHERE append_key = $5) as event_id;`);
 
     t.test('insert events for an entity', assert => {
-      // [thingEventId1] = appendStmt.get([thingEntity, thingKey, thingCreatedEvent, data, uuid.v4(), null]);
       assert.doesNotThrow(() => [thingEventId1] = appendStmt.get([thingEntity, thingKey, thingCreatedEvent, data, appendKey1, null]));
       assert.doesNotThrow(() => [thingEventId2] = appendStmt.get([thingEntity, thingKey, thingDeletedEvent, data, appendKey2, thingEventId1]));
-      assert.doesNotThrow(() => [pingEventHomeId] = appendStmt.get([tableTennisEntity, homeTableKey, pingEvent, data, uuid.v4(), null]));
-      assert.doesNotThrow(() => [pingEventWorkId] = appendStmt.get([tableTennisEntity, workTableKey, pingEvent, data, uuid.v4(), null]));
+      assert.doesNotThrow(() => [pingEventHomeId] = appendStmt.get([tableTennisEntity, homeTableKey, pingEvent, data, nanoid(), null]));
+      assert.doesNotThrow(() => [pingEventWorkId] = appendStmt.get([tableTennisEntity, workTableKey, pingEvent, data, nanoid(), null]));
       assert.end();
     });
 
     t.test('previous_id rules', assert => {
       assert.throws(
-        () => stmt.run([tableTennisEntity, homeTableKey, pingEvent, data, uuid.v4(), null]),
+        () => stmt.run([tableTennisEntity, homeTableKey, pingEvent, data, nanoid(), null]),
         /previous_id can only be null for first entity event/,
         'cannot insert multiple null previous ID for an entity');
       assert.throws(
-        () => stmt.run([tableTennisEntity, workTableKey, pongEvent, data, uuid.v4(), pingEventHomeId]),
+        () => stmt.run([tableTennisEntity, workTableKey, pongEvent, data, nanoid(), pingEventHomeId]),
         /previous_id must be in same entity/,
         'previous ID must be in same entity');
       assert.end();
@@ -161,7 +160,7 @@ INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_
         /UNIQUE constraint failed: events\.append_key/,
         'cannot insert different event for same append key');
       assert.throws(
-        () => stmt.run([thingEntity, thingKey, thingDeletedEvent, data, uuid.v4(), thingEventId1]),
+        () => stmt.run([thingEntity, thingKey, thingDeletedEvent, data, nanoid(), thingEventId1]),
         /UNIQUE constraint failed: events\.previous_id/,
         'cannot insert different event for same previous ID');
       assert.end();

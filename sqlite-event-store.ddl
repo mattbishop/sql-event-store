@@ -18,13 +18,13 @@ CREATE TABLE events
     entity_key  TEXT NOT NULL,
     event       TEXT NOT NULL,
     data        TEXT NOT NULL,
-    event_id    TEXT NOT NULL UNIQUE CHECK (event_id LIKE '________-____-____-____-____________'),
+    -- uuid7, sortable
+    event_id    TEXT PRIMARY KEY CHECK (event_id LIKE '________-____-____-____-____________'),
+    -- can be anything, like a ULID, nanoid, etc.
     append_key  TEXT NOT NULL UNIQUE,
-    -- previous event uuid; null for first event; null does not trigger UNIQUE constraint
+    -- previous event uuid
+    -- null for first event in entity instance; null does not trigger UNIQUE constraint
     previous_id TEXT UNIQUE,
-    timestamp   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    -- ordering sequence
-    sequence    INTEGER PRIMARY KEY, -- sequence for all events in all entities
     FOREIGN KEY (entity, event) REFERENCES entity_events (entity, event)
 );
 
@@ -46,20 +46,26 @@ BEGIN
 END;
 
 
+-- use uuid7 because it's sortable
 DROP VIEW IF EXISTS uuid7;
 CREATE VIEW uuid7 AS
-WITH unixtime AS (SELECT CAST((UNIXEPOCH('subsec') * 1000) AS INTEGER) AS time)
+WITH unixtime  AS (SELECT CAST((UNIXEPOCH('subsec') * 1000) AS INTEGER) AS time),
+     current_rowid AS (SELECT IFNULL(MAX(ROWID), 0) AS value FROM events)
 SELECT PRINTF('%08x-%04x-%04x-%04x-%012x',
     (SELECT time FROM unixtime) >> 16,
     (SELECT time FROM unixtime) & 0xffff,
-    ABS(RANDOM()) % 0x0fff + 0x7000,
-    ABS(RANDOM()) % 0x3fff + 0x8000,
-    ABS(RANDOM()) >> 16) AS next;
+    -- Bits 63-52 of ROWID + version
+    (((SELECT value FROM current_rowid) >> 52) & 0x0fff) | 0x7000,
+    -- Bits 51-38 of ROWID + variant
+    (((SELECT value FROM current_rowid) >> 38) & 0x3fff) | 0x8000,
+    -- Lower 38 bits of ROWID with last 10 of random
+    (((SELECT value FROM current_rowid) & 0x3ffffffffc00) | ABS(RANDOM()) & 0x3ff)
+) AS next;
 
 
 DROP VIEW IF EXISTS append_event;
 CREATE VIEW append_event AS
-    SELECT entity, entity_key, event, data, append_key, previous_id, event_id FROM events;
+    SELECT entity, entity_key, event, data, event_id, append_key, previous_id FROM events;
 
 
 CREATE TRIGGER generate_event_id_on_append
@@ -67,8 +73,8 @@ CREATE TRIGGER generate_event_id_on_append
     ON append_event
     FOR EACH ROW
 BEGIN
-    INSERT INTO events (entity, entity_key, event, data, append_key, event_id, previous_id)
-    VALUES (NEW.entity, NEW.entity_key, NEW.event, NEW.data, NEW.append_key, (SELECT next FROM uuid7), NEW.previous_id);
+    INSERT INTO events (entity, entity_key, event, data, event_id, append_key, previous_id)
+    VALUES (NEW.entity, NEW.entity_key, NEW.event, NEW.data, (SELECT next FROM uuid7), NEW.append_key, NEW.previous_id);
 END;
 
 
