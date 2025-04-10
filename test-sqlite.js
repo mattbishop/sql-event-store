@@ -36,12 +36,6 @@ function shutdownDb(db) {
 test('setup', async setup => {
   const db = await initDb();
 
-  setup.test('running setup on existing db succeeds', t => {
-    t.doesNotThrow(() => loadDdl(db));
-    t.end();
-  });
-
-
   setup.test('insert events', t => {
     const stmt = db.prepare('INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id) VALUES (?, ?, ?, ?, ?, ?);');
 

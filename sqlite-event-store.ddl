@@ -1,8 +1,4 @@
 -- SQLITE event store
-PRAGMA foreign_keys = ON;
-
-DROP TABLE IF EXISTS events;
-
 
 CREATE TABLE events
 (
@@ -38,9 +34,8 @@ END;
 
 
 -- use uuid7 because it's sortable
-DROP VIEW IF EXISTS uuid7;
 CREATE VIEW uuid7 AS
-WITH unixtime  AS (SELECT CAST((UNIXEPOCH('subsec') * 1000) AS INTEGER) AS time),
+WITH unixtime AS (SELECT CAST((UNIXEPOCH('subsec') * 1000) AS INTEGER) AS time),
      current_rowid AS (SELECT IFNULL(MAX(ROWID), 0) AS value FROM events)
 SELECT PRINTF('%08x-%04x-%04x-%04x-%012x',
     (SELECT time FROM unixtime) >> 16,
@@ -54,7 +49,7 @@ SELECT PRINTF('%08x-%04x-%04x-%04x-%012x',
 ) AS next;
 
 
-DROP VIEW IF EXISTS append_event;
+
 CREATE VIEW append_event AS
     SELECT entity, entity_key, event, data, event_id, append_key, previous_id FROM events;
 
