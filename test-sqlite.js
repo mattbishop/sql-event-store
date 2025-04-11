@@ -57,24 +57,24 @@ test('setup', async setup => {
     t.test('cannot insert empty columns', assert => {
       assert.throws(
         () => stmt.run([null, thingKey, thingCreatedEvent, data, appendKey1]),
-        /NOT NULL constraint failed: events\.entity/,
+        /NOT NULL constraint failed: ledger\.entity/,
         'cannot insert null entity');
       assert.throws(
         () => stmt.run([thingEntity, null, thingCreatedEvent, data, appendKey1]),
-        /NOT NULL constraint failed: events\.entity_key/,
+        /NOT NULL constraint failed: ledger\.entity_key/,
         'cannot insert null entity key');
       assert.throws(
         () => stmt.run([thingEntity, thingKey, null, data, appendKey1]),
-        /NOT NULL constraint failed: events\.event/,
+        /NOT NULL constraint failed: ledger\.event/,
         'cannot insert null event');
       assert.throws(
         () => stmt.run([thingEntity, thingKey, thingCreatedEvent, null, appendKey1]),
-        /NOT NULL constraint failed: events\.data/,
+        /NOT NULL constraint failed: ledger\.data/,
         'cannot insert null event data');
 
       assert.throws(
         () => stmt.run([thingEntity, thingKey, thingCreatedEvent, data, null]),
-        /NOT NULL constraint failed: events\.append_key/,
+        /NOT NULL constraint failed: ledger\.append_key/,
         'cannot insert null append key');
       assert.end();
     });
@@ -83,7 +83,7 @@ test('setup', async setup => {
     const appendStmt = db.prepare(`
 INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id)
     VALUES ($1, $2, $3, $4, $5, $6)
-    RETURNING (SELECT event_id FROM events WHERE append_key = $5) as event_id;`);
+    RETURNING (SELECT event_id FROM ledger WHERE append_key = $5) as event_id;`);
 
     t.test('insert events for an entity', assert => {
       assert.doesNotThrow(() => [thingEventId1] = appendStmt.get([thingEntity, thingKey, thingCreatedEvent, data, appendKey1, null]));
@@ -112,11 +112,11 @@ INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_
         'cannot insert complete duplicate event');
       assert.throws(
         () => stmt.run([thingEntity, thingKey, thingDeletedEvent, data, appendKey1, thingEventId2]),
-        /UNIQUE constraint failed: events\.append_key/,
+        /UNIQUE constraint failed: ledger\.append_key/,
         'cannot insert different event for same append key');
       assert.throws(
         () => stmt.run([thingEntity, thingKey, thingDeletedEvent, data, nanoid(), thingEventId1]),
-        /UNIQUE constraint failed: events\.previous_id/,
+        /UNIQUE constraint failed: ledger\.previous_id/,
         'cannot insert different event for same previous ID');
       assert.end();
     });
@@ -125,13 +125,13 @@ INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_
   setup.test('cannot delete or update', t => {
     t.test('cannot delete or update events', assert => {
       assert.throws(
-        () => db.exec(`DELETE FROM events WHERE entity = '${thingEntity}'`),
-        /Cannot delete events/,
+        () => db.exec(`DELETE FROM ledger WHERE entity = '${thingEntity}'`),
+        /Cannot delete events from the ledger/,
         'cannot delete events'
       );
       assert.throws(
-        () => db.exec(`UPDATE events SET entity_key = 'fail' WHERE entity = '${thingEntity}'`),
-        /Cannot update events/,
+        () => db.exec(`UPDATE ledger SET entity_key = 'fail' WHERE entity = '${thingEntity}'`),
+        /Cannot update events in the ledger/,
         'cannot update events'
       );
       assert.end();
