@@ -57,6 +57,9 @@ WITH unixtime AS (
          SELECT
              CASE
                  WHEN (SELECT max_rowid FROM last_rowid) IS NOT NULL
+                     -- BUG this doesn't work, CAST does not understand hex strings.
+                     -- todo store timestamp_ms, counter and event_id in the database so I don't have to
+                     -- do all this parsing. It will be faster, simpler, though at the expense of database size.
                      THEN (CAST('0x' || (SELECT time_high_hex FROM latest_uuid) AS INTEGER) << 16)
                           + CAST('0x' || (SELECT time_mid_hex FROM latest_uuid) AS INTEGER)
                           + (CAST('0x' || SUBSTR((SELECT time_low_version_hex FROM latest_uuid), 2, 3) AS INTEGER) << 0)
@@ -132,3 +135,66 @@ CREATE TRIGGER previous_id_in_same_entity
 BEGIN
     SELECT RAISE(FAIL, 'previous_id must be in same entity');
 END;
+
+
+-- Don't know if this is useful. Views aren't really functions, and I need one that
+-- also parses the counter and returns that. I would need to double the logic and parse it
+-- at the same time it's parsing the timestamp.
+CREATE VIEW timestamp_from_event AS
+WITH RECURSIVE htoi(hex_str, remaining, value) AS
+(
+    SELECT
+        SUBSTR(event_id, 1, 8) || SUBSTR(event_id, 10, 4),
+        SUBSTR(event_id, 1, 8 )|| SUBSTR(event_id, 10, 4),
+        0
+    FROM events
+    UNION ALL
+    SELECT
+        hex_str,
+        SUBSTR(remaining, 2),
+        (value << 4) + INSTR('0123456789abcdef', SUBSTR(remaining, 1, 1)) - 1
+    FROM htoi
+    WHERE remaining <> ''
+),
+unix_ms_values AS (
+   SELECT
+       (SELECT value FROM htoi WHERE htoi.hex_str = SUBSTR(event_id, 1, 8) || SUBSTR(event_id, 10, 4) AND remaining = '') AS unix_ms,
+   FROM events
+)
+SELECT unix_ms from unix_ms_values;
+
+
+
+CREATE VIEW replay_events AS
+WITH RECURSIVE hex_to_int(hex_str, remaining, value) AS (
+    SELECT
+        SUBSTR(event_id, 1, 8) || SUBSTR(event_id, 10, 4),
+        SUBSTR(event_id, 1, 8 )|| SUBSTR(event_id, 10, 4),
+        0
+    FROM events
+    UNION ALL
+    SELECT
+        hex_str,
+        SUBSTR(remaining, 2),
+        (value << 4) + INSTR('0123456789abcdef', SUBSTR(remaining, 1, 1)) - 1
+    FROM hex_to_int
+    WHERE remaining <> ''
+),
+               unix_ms_values AS (
+                   SELECT
+                       entity,
+                       entity_key,
+                       event,
+                       data,
+                       (SELECT value FROM hex_to_int WHERE hex_to_int.hex_str = SUBSTR(event_id, 1, 8) || SUBSTR(event_id, 10, 4) AND remaining = '') AS unix_ms,
+                       event_id
+                   FROM events
+               )
+SELECT
+    entity,
+    entity_key,
+    event,
+    data,
+    strftime('%Y-%m-%dT%H:%M:%fZ', unix_ms / 1000.0, 'unixepoch') AS timestamp,
+    event_id
+FROM unix_ms_values ORDER BY event_id;
