@@ -101,3 +101,15 @@ CREATE TRIGGER previous_id_in_same_entity
     ON ledger
     FOR EACH ROW
     EXECUTE FUNCTION check_previous_id_in_same_entity();
+
+
+
+CREATE VIEW replay_events AS
+SELECT
+    entity,
+    entity_key,
+    event,
+    data,
+    timestamp,
+    event_id
+FROM ledger ORDER BY sequence;
