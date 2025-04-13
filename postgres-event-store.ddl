@@ -29,6 +29,28 @@ CREATE VIEW append_event AS
 SELECT entity, entity_key, event, data, event_id, append_key, previous_id FROM ledger;
 
 
+-- Generates a UUID for each new event.
+CREATE FUNCTION generate_event_id() RETURNS trigger AS
+$$
+BEGIN
+    IF (NEW.event_id IS NOT NULL)
+    THEN
+        RAISE EXCEPTION 'event_id must not be directly set with INSERT statement, it is generated';
+    END IF;
+    NEW.event_id = gen_random_uuid();
+    RETURN NEW;
+END;
+$$
+    LANGUAGE plpgsql;
+
+
+CREATE TRIGGER generate_event_id_on_append
+    BEFORE INSERT
+    ON ledger
+    FOR EACH ROW
+    EXECUTE PROCEDURE generate_event_id();
+
+
 -- Can only use null previousId for first event in an entity
 CREATE FUNCTION check_first_event_for_entity() RETURNS trigger AS
 $$
@@ -39,9 +61,9 @@ BEGIN
                     WHERE NEW.entity_key = entity_key
                       AND NEW.entity = entity))
     THEN
-        RAISE EXCEPTION 'previousid can only be null for first entity event';
-END IF;
-RETURN NEW;
+        RAISE EXCEPTION 'previous_id can only be null for first entity event';
+    END IF;
+    RETURN NEW;
 END;
 $$
     LANGUAGE plpgsql;
@@ -66,9 +88,9 @@ BEGIN
                           AND NEW.entity_key = entity_key
                           AND NEW.entity = entity))
     THEN
-        RAISE EXCEPTION 'previousid must be in the same entity';
-END IF;
-RETURN NEW;
+        RAISE EXCEPTION 'previous_id must be in the same entity';
+    END IF;
+    RETURN NEW;
 END;
 $$
     LANGUAGE plpgsql;
