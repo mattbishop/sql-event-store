@@ -1,64 +1,42 @@
--- PostgreSQL event store
+-- Postgres event store
 
-DROP TABLE IF EXISTS events;
-DROP TABLE IF EXISTS entity_events;
-
-CREATE TABLE entity_events
+CREATE TABLE ledger
 (
-    entity TEXT NOT NULL,
-    event  TEXT NOT NULL,
-    PRIMARY KEY (entity, event)
-);
-
-CREATE OR REPLACE RULE ignore_dup_entity_events AS ON INSERT TO entity_events
-    WHERE EXISTS(SELECT 1
-                 FROM entity_events
-                 WHERE (entity, event) = (NEW.entity, NEW.event))
-    DO INSTEAD NOTHING;
-
--- immutable entity_events
-CREATE OR REPLACE RULE ignore_delete_entity_events AS ON DELETE TO entity_events
-    DO INSTEAD NOTHING;
-
-CREATE OR REPLACE RULE ignore_update_entity_events AS ON UPDATE TO entity_events
-    DO INSTEAD NOTHING;
-
-
-
-CREATE TABLE events
-(
-    entity     TEXT        NOT NULL,
-    entitykey  TEXT        NOT NULL,
-    event      TEXT        NOT NULL,
-    data       JSONB       NOT NULL,
-    eventid    UUID        NOT NULL UNIQUE,
-    commandid  UUID        NOT NULL UNIQUE,
+    entity      TEXT        NOT NULL,
+    entity_key  TEXT        NOT NULL,
+    event       TEXT        NOT NULL,
+    data        JSONB       NOT NULL,
+    event_id    UUID        NOT NULL UNIQUE,
+    append_key  TEXT        NOT NULL UNIQUE,
     -- previous event uuid; null for first event; null does not trigger UNIQUE constraint
-    previousid UUID        UNIQUE,
-    timestamp  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    previous_id UUID        UNIQUE,
+    timestamp   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     -- ordering sequence
-    sequence   BIGSERIAL PRIMARY KEY, -- sequence for all events in all entities
-    FOREIGN KEY (entity, event) REFERENCES entity_events (entity, event)
+    sequence   BIGSERIAL    PRIMARY KEY -- sequence for all events in all entities
 );
 
-CREATE INDEX entity_index ON events (entitykey, entity);
+CREATE INDEX entity_index ON ledger (entity_key, entity);
 
 -- immutable events
-CREATE OR REPLACE RULE ignore_delete_events AS ON DELETE TO events
+CREATE RULE ignore_delete_events AS ON DELETE TO ledger
     DO INSTEAD NOTHING;
 
-CREATE OR REPLACE RULE ignore_update_events AS ON UPDATE TO events
+CREATE RULE ignore_update_events AS ON UPDATE TO ledger
     DO INSTEAD NOTHING;
+
+
+CREATE VIEW append_event AS
+SELECT entity, entity_key, event, data, event_id, append_key, previous_id FROM ledger;
 
 
 -- Can only use null previousId for first event in an entity
-CREATE OR REPLACE FUNCTION check_first_event_for_entity() RETURNS trigger AS
+CREATE FUNCTION check_first_event_for_entity() RETURNS trigger AS
 $$
 BEGIN
-    IF (NEW.previousid IS NULL
+    IF (NEW.previous_id IS NULL
         AND EXISTS (SELECT 1
-                    FROM events
-                    WHERE NEW.entitykey = entitykey
+                    FROM ledger
+                    WHERE NEW.entity_key = entity_key
                       AND NEW.entity = entity))
     THEN
         RAISE EXCEPTION 'previousid can only be null for first entity event';
@@ -68,24 +46,24 @@ END;
 $$
     LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS first_event_for_entity ON events;
+
 CREATE TRIGGER first_event_for_entity
     BEFORE INSERT
-    ON events
+    ON ledger
     FOR EACH ROW
     EXECUTE PROCEDURE check_first_event_for_entity();
 
 
 
--- previousId must be in the same entity as the event
-CREATE OR REPLACE FUNCTION check_previousid_in_same_entity() RETURNS trigger AS
+-- previous_id must be in the same entity as the event
+CREATE FUNCTION check_previous_id_in_same_entity() RETURNS trigger AS
 $$
 BEGIN
-    IF (NEW.previousid IS NOT NULL
+    IF (NEW.previous_id IS NOT NULL
         AND NOT EXISTS (SELECT 1
-                        FROM events
-                        WHERE NEW.previousid = eventid
-                          AND NEW.entitykey = entitykey
+                        FROM ledger
+                        WHERE NEW.previous_id = event_id
+                          AND NEW.entity_key = entity_key
                           AND NEW.entity = entity))
     THEN
         RAISE EXCEPTION 'previousid must be in the same entity';
@@ -95,9 +73,9 @@ END;
 $$
     LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS previousid_in_same_entity ON events;
-CREATE TRIGGER previousid_in_same_entity
+
+CREATE TRIGGER previous_id_in_same_entity
     BEFORE INSERT
-    ON events
+    ON ledger
     FOR EACH ROW
-    EXECUTE FUNCTION check_previousid_in_same_entity();
+    EXECUTE FUNCTION check_previous_id_in_same_entity();
