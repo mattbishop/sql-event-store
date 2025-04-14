@@ -17,8 +17,8 @@ CREATE TABLE ledger
     sequence    INTEGER PRIMARY KEY AUTOINCREMENT
 );
 
+CREATE INDEX entity_index ON ledger (entity, entity_key);
 
-CREATE INDEX entity_index ON ledger (entity_key, entity);
 
 -- immutable ledger
 CREATE TRIGGER no_delete_ledger
@@ -34,6 +34,29 @@ CREATE TRIGGER no_update_ledger
 BEGIN
     SELECT RAISE(FAIL, 'Cannot update events in the ledger');
 END;
+
+
+CREATE VIEW append_event AS
+SELECT
+    entity,
+    entity_key,
+    event,
+    data,
+    event_id,
+    append_key,
+    previous_id
+FROM ledger;
+
+
+CREATE VIEW replay_events AS
+SELECT
+    entity,
+    entity_key,
+    event,
+    data,
+    strftime('%Y-%m-%dT%H:%M:%fZ', ts_ms / 1000.0, 'unixepoch') AS timestamp,
+    event_id
+FROM ledger ORDER BY sequence;
 
 
 -- From Claude 3.7, thanks!
@@ -52,18 +75,20 @@ AS next
 FROM random_128;
 
 
-
-CREATE VIEW append_event AS
-SELECT entity, entity_key, event, data, event_id, append_key, previous_id FROM ledger;
-
-
 CREATE TRIGGER generate_event_id_on_append
     INSTEAD OF INSERT
     ON append_event
     FOR EACH ROW
 BEGIN
     INSERT INTO ledger (entity, entity_key, event, data, event_id, ts_ms, append_key, previous_id)
-    VALUES (NEW.entity, NEW.entity_key, NEW.event, NEW.data, (SELECT next FROM uuid4), CAST((UNIXEPOCH('subsec') * 1000) AS INTEGER), NEW.append_key, NEW.previous_id);
+    VALUES (NEW.entity,
+            NEW.entity_key,
+            NEW.event,
+            NEW.data,
+            (SELECT next FROM uuid4),
+            CAST((UNIXEPOCH('subsec') * 1000) AS INTEGER),
+            NEW.append_key,
+            NEW.previous_id);
 END;
 
 
@@ -81,6 +106,7 @@ BEGIN
     SELECT RAISE(FAIL, 'previous_id can only be null for first entity event');
 END;
 
+
 -- previous_id must be in the same entity as the event
 CREATE TRIGGER previous_id_in_same_entity
     BEFORE INSERT
@@ -95,15 +121,3 @@ CREATE TRIGGER previous_id_in_same_entity
 BEGIN
     SELECT RAISE(FAIL, 'previous_id must be in same entity');
 END;
-
-
-
-CREATE VIEW replay_events AS
-SELECT
-    entity,
-    entity_key,
-    event,
-    data,
-    strftime('%Y-%m-%dT%H:%M:%fZ', ts_ms / 1000.0, 'unixepoch') AS timestamp,
-    event_id
-FROM ledger ORDER BY sequence;

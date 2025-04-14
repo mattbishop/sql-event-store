@@ -15,7 +15,8 @@ CREATE TABLE ledger
     sequence   BIGSERIAL    PRIMARY KEY -- sequence for all events in all entities
 );
 
-CREATE INDEX entity_index ON ledger (entity_key, entity);
+CREATE INDEX entity_index ON ledger (entity, entity_key);
+
 
 -- immutable events
 CREATE RULE ignore_delete_events AS ON DELETE TO ledger
@@ -26,7 +27,26 @@ CREATE RULE ignore_update_events AS ON UPDATE TO ledger
 
 
 CREATE VIEW append_event AS
-SELECT entity, entity_key, event, data, event_id, append_key, previous_id FROM ledger;
+SELECT
+    entity,
+    entity_key,
+    event,
+    data,
+    event_id,
+    append_key,
+    previous_id
+FROM ledger;
+
+
+CREATE VIEW replay_events AS
+SELECT
+    entity,
+    entity_key,
+    event,
+    data,
+    timestamp,
+    event_id
+FROM ledger ORDER BY sequence;
 
 
 -- Generates a UUID for each new event.
@@ -39,9 +59,9 @@ BEGIN
     END IF;
     NEW.event_id = gen_random_uuid();
     RETURN NEW;
-END;
+END
 $$
-    LANGUAGE plpgsql;
+LANGUAGE plpgsql;
 
 
 CREATE TRIGGER generate_event_id_on_append
@@ -64,9 +84,9 @@ BEGIN
         RAISE EXCEPTION 'previous_id can only be null for first entity event';
     END IF;
     RETURN NEW;
-END;
+END
 $$
-    LANGUAGE plpgsql;
+LANGUAGE plpgsql;
 
 
 CREATE TRIGGER first_event_for_entity
@@ -91,9 +111,9 @@ BEGIN
         RAISE EXCEPTION 'previous_id must be in the same entity';
     END IF;
     RETURN NEW;
-END;
+END
 $$
-    LANGUAGE plpgsql;
+LANGUAGE plpgsql;
 
 
 CREATE TRIGGER previous_id_in_same_entity
@@ -101,15 +121,3 @@ CREATE TRIGGER previous_id_in_same_entity
     ON ledger
     FOR EACH ROW
     EXECUTE FUNCTION check_previous_id_in_same_entity();
-
-
-
-CREATE VIEW replay_events AS
-SELECT
-    entity,
-    entity_key,
-    event,
-    data,
-    timestamp,
-    event_id
-FROM ledger ORDER BY sequence;
