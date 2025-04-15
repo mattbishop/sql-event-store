@@ -49,6 +49,47 @@ SELECT
 FROM ledger ORDER BY sequence;
 
 
+CREATE FUNCTION replay_events_after(after_event_id UUID)
+    RETURNS TABLE (
+                      entity        TEXT,
+                      entity_key    TEXT,
+                      event         TEXT,
+                      data          JSONB,
+                      timestamp     TIMESTAMPTZ,
+                      event_id      UUID
+                  ) AS
+$$
+DECLARE
+    after_sequence BIGINT;
+BEGIN
+    -- Find the sequence number of the specified event_id
+    SELECT sequence INTO after_sequence
+    FROM ledger
+    WHERE event_id = after_event_id;
+
+    -- If event_id doesn't exist, raise an error
+    IF after_sequence IS NULL THEN
+        RAISE EXCEPTION 'Event with ID % does not exist', after_event_id;
+    END IF;
+
+    -- Return all events with a higher sequence number
+    RETURN QUERY
+        SELECT
+            l.entity,
+            l.entity_key,
+            l.event,
+            l.data,
+            l.timestamp,
+            l.event_id
+        FROM ledger l
+        WHERE l.sequence > after_sequence
+        ORDER BY l.sequence;
+END
+$$
+LANGUAGE plpgsql;
+
+
+
 -- Generates a UUID for each new event.
 CREATE FUNCTION generate_event_id() RETURNS trigger AS
 $$

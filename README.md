@@ -1,11 +1,9 @@
 # SQL Event Store
-Demonstration of a SQL event store with deduplication and guaranteed event ordering. The database rules are intended to prevent incorrect information from entering into an event stream. You are assumed to have familiarity with [event sourcing](https://martinfowler.com/eaaDev/EventSourcing.html).
+Demonstration of a SQL event store with deduplication and guaranteed event ordering. The database rules are intended to prevent incorrect information from entering into an event stream. You are assumed to have familiarity with [event sourcing](https://martinfowler.com/eaaDev/EventSourcing.html). Two DDLs are provided–one for [Postgres](https://www.postgresql.org), one for [SQLite](https://sqlite.org).
 
-This project uses a node test suite and SQLite to ensure the DDL complies with the design requirements. This SQLite event store can be used in highly-constrained environments that require an embedded event store, like a mobile device or an IoT system. 
+This project uses a node test suite to ensure the DDLs comply with the design requirements. The DDLs can also be ported to most SQL RDBMS and accessed from any number of writers, including high-load serverless functions, without a coordinating “single writer” process.
 
-This event store can also be ported to most SQL RDBMS and accessed from any number of writers, including high-load serverless functions, without a coordinating “single writer” process. The project includes both a SQLite and Postgres version of the DDL, including tests.
-
-# SQLite Event Store
+## SQLite Event Store
 
 The [SQLite version](./sqlite-event-store.ddl) of SQL event store was built and tested with SQLite 3.49; it should run on recent versions of SQLite, at least since 2023.
 
@@ -17,39 +15,21 @@ One must have Node installed (Node 22 is what I used) and then:
 > npm install
 ```
 
-Once it has finished installing the dependencies, run the [tests](test-sqlite.js) with:
+Once it has finished installing the dependencies, run the [tests](test-sqlite.js):
 
 ```bash
 > node test-sqlite.js
 ```
 
-The test uses [sql.js](https://github.com/kripken/sql.js), the pure Javascript port of SQLite for reliable compilation and test execution. The test will dump the test database to `test-event-store.sqlite` for your examination.
+The SQLite test uses [sql.js](https://github.com/kripken/sql.js), the pure Javascript port of SQLite for reliable compilation and test execution. The test will dump the test database to `sqlite-store.db` for your examination.
 
-### Appending Events
+## Postgres Event Store
 
-In order to manage the business rules of an Event Store, one must append events by inserting into the `append_event` view. Here is an example:
-
-```sqlite
--- Add an event. Note the RETURNING clause, which returns the generated event_id for the appended event. This is used to append the next event.
-INSERT INTO append_event (entity, entity_key, event, data, append_key)
-VALUES ('game', 'apr-7-2025', 'game started','true', 'an append key')
-RETURNING (SELECT event_id FROM events WHERE append_key = '12345678') as event_id;
-
--- now insert another event
-INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id)
-VALUES ('game', 'apr-7-2025', 'game going','true', 'another-append-key', '019612a6-38ac-7108-85fd-33e8081cedaf')
-RETURNING (SELECT event_id FROM events WHERE append_key = 'another-append-key') as event_id;
-```
-
-
-
-# Postgres Event Store
-
-The [Postgres version](./postgres-event-store.ddl) of SQL event store has the same behavior as the SQLite version. It was built and tested on Postgres 13 but can be used in other versions.
+The [Postgres version](./postgres-event-store.ddl) of SQL event store has the same behavior as the SQLite version. It was built and tested on Postgres 17 but can be used in other versions.
 
 The postgres version can be tested with the [test-postgres.js]() script. Run this file instead of `test-sqlite.js`. It will connect to the postgres server defined in the environment variables, according to [node-postgres](https://node-postgres.com/features/connecting). 
 
-### Running
+### Running Tests
 
 One must have Node and NPM installed (Node 16 is what I used) and then:
 
@@ -60,10 +40,71 @@ One must have Node and NPM installed (Node 16 is what I used) and then:
 Once it has finished installing the dependencies, run the [tests](test-sqlite.js) with:
 
 ```bash
-> node test-sqlite.js
+> node test-postgres.js
 ```
 
-The test uses [sql.js](https://github.com/kripken/sql.js), the pure Javascript port of SQLite for reliable compilation and test execution. The test will dump the test database to `test-event-store.sqlite` for your examination.
+The Postgres test uses [PGlite](https://pglite.dev), a WASM build of Postgres, which means t does not need a running Postgres server to be running. It will dump the test ledger table to `postgres-store.tsv`.
+
+## Usage Model
+
+Both SQLite and Postgres versions have the same SQL usage model.
+
+### Appending Events
+
+In order to manage the business rules of an event ledger, one must append events by inserting into the `append_event` view. Here is an example:
+
+```sql
+-- Add an event. Note the RETURNING clause, which returns the generated event_id for the appended event. This is used to append the next event.
+INSERT INTO append_event (entity, entity_key, event, data, append_key) -- first event in entity, omit previous_id
+VALUES ('game', 'apr-7-2025', 'game started','true', 'an append key')
+RETURNING event_id;
+
+-- now insert another event
+INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id)
+VALUES ('game', 'apr-7-2025', 'game going','true', 'another-append-key', '019612a6-38ac-7108-85fd-33e8081cedaf')
+RETURNING event_id;
+```
+
+### Replaying Events
+
+One can replay events in order, without unhelpful data, by using the `replay_events` view. Here are examples:
+
+```sql
+-- Replay all the events
+SELECT * FROM replay_events;
+
+-- Replay events from a specific entity
+SELECT * FROM replay_events
+WHERE entity = 'game'
+  AND entity_key = '2022 Classic';
+
+-- Replay only certain events
+SELECT * FROM replay_events
+WHERE entity = 'game'
+  AND entity_key = '2022 Classic'
+  AND event IN ('game-started', 'game-finished');
+
+-- Catch up with events after a known event
+SELECT * FROM replay_events
+WHERE entity = 'game' 
+  AND entity_key = '2022 Classic'
+  -- Works for both SQLite and Postgres; see below for simpler Postgres version
+  AND sequence > (SELECT sequence
+                  FROM ledger
+                  WHERE event_id = '123e4567-e89b-12d3-a456-426614174000');
+```
+
+### Catching Up With Postgres
+
+Replaying events to catch up after a last-read event is a bit easier with Postgres, since it has stored functions. SQLite does not offer similar functionality.
+
+```postgresql
+-- Catch up on new events from a specific entity, after a specific event
+-- Postgres-only
+SELECT * FROM replay_events_after('123e4567-e89b-12d3-a456-426614174000')
+WHERE entity = 'game' 
+  AND entity_key = '2922';
+```
 
 ### Conceptual Model
 
@@ -80,11 +121,10 @@ Appends to other entities do not affect each other, so many events can be append
 - **Append-Only** Once events are created, they cannot be deleted, updated or otherwise modified. This includes entity event definitions.
 - **Insertion-Ordered** Events must be consistently replayable in the order they were inserted.
 - **Event race conditions are Impossible** The event store prevents a client from writing an event to an entity if another event has been inserted after the client has replayed an event stream.
-- **Entity and Event Validation** Event and Entity names cannot be misspelled or misapplied. A client cannot insert an event from the wrong entity. Event and entity names must be defined before use.
 
 ### SQL Table Structure
 
-#### `events` Table
+#### `ledger` Table
 
 | Column        | Notes                                                                                                                                                                                                              |
 |---------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -92,13 +132,15 @@ Appends to other entities do not affect each other, so many events can be append
 | `entity_key`  | The business identifier for the entity.                                                                                                                                                                            |
 | `event`       | The event name.                                                                                                                                                                                                    |
 | `data`        | The event data. Cannot be `null` but can be an empty string.                                                                                                                                                       |
-| `event_id`    | The event ID. This value is used by the next event as it's `previous_id` value to guard against a Lost Event problem. **AUTOPOPULATES—DO NOT INSERT.**                                                              |
+| `event_id`    | The event ID. This value is used by the next event as it's `previous_id` value to guard against a Lost Event problem. **AUTOPOPULATES—DO NOT INSERT.**                                                             |
 | `append_key`  | The append key from the client. Database rules ensure an append key can only be used once. Can be a Command ID, or another client-generated unique key for the event append action. Useful for idempotent appends. |
 | `previous_id` | The event ID of the immediately-previous event for this entity. If this is the first event for an entity, then omit or send `NULL`.                                                                                |
+| `timestamp`   | The timestamp the event was inserted into the ledger.                                                                                                                                                              |
+| `sequence`    | Overall ledger position for an event.                                                                                                                                                                              |
 
-The `events` table is designed to allow multiple concurrent, uncoordinated writers to safely create events. It expects the client to know the difference between an entity's first event and subsequent events.
+The `ledger` table is designed to allow multiple concurrent, uncoordinated writers to safely create events. It expects the client to know the difference between an entity's first event and subsequent events.
 
-Multiple constraints are applied to this table to ensure bad events do not make their way into the system. This includes duplicated events and commands, incorrect naming and ensured sequential events.
+Multiple constraints are applied to this table to ensure bad events do not make their way into the system. This includes duplicated events and append keys, and ensured sequential events.
 
 ### Client Use Cases
 
@@ -117,10 +159,9 @@ Clients must always fetch, or replay, the events for an entity before inserting 
 SELECT event,
        data,
        event_id
-FROM events
+FROM replay_events
     WHERE entity = ?
-      AND entity_key = ?
-ORDER BY event_id;
+      AND entity_key = ?;
 ```
 
 If a command produces a subsequent event for an existing entity, the `event_id` of the last event must be used as the `previous_id` of the next event. This design enforces the Event Sourcing pattern of building current read models before appending new events for an entity.
@@ -134,12 +175,12 @@ Two types of events can be appended into the event log. The first event for an e
 In this case, the `previous_id` does not exist, so it is omitted from the insert statement.
 
 ```sql
-INSERT INTO events(entity,
-                   entity_key,
-                   event,
-                   data,
-                   append_key) 
-                   VALUES (?, ?, ?, ?, ?);
+INSERT INTO append_event(entity,
+                         entity_key,
+                         event,
+                         data,
+                         append_key) 
+VALUES (?, ?, ?, ?, ?);
 ```
 
 ##### Subsequent Events
@@ -147,11 +188,11 @@ INSERT INTO events(entity,
 The `previous_id` is the `event_id` of the last event recorded for the entity.
 
 ```sql
-INSERT INTO events(entity,
-                   entity_key,
-                   event,
-                   data,
-                   append_key,
-                   previous_id) 
-                   VALUES (?, ?, ?, ?, ?, ?);
+INSERT INTO append_event(entity,
+                         entity_key,
+                         event,
+                         data,
+                         append_key,
+                         previous_id) 
+VALUES (?, ?, ?, ?, ?, ?);
 ```
