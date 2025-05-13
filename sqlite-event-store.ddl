@@ -6,14 +6,15 @@ CREATE TABLE ledger
     entity_key  TEXT NOT NULL,
     event       TEXT NOT NULL,
     data        TEXT NOT NULL,
-    -- uuid
-    event_id    TEXT  NOT NULL UNIQUE CHECK (event_id LIKE '________-____-____-____-____________'),
-    ts_ms       INTEGER NOT NULL,
     -- can be anything, like a ULID, nanoid, etc.
     append_key  TEXT NOT NULL UNIQUE,
-    -- previous event uuid
-    -- null for first event in entity instance; null does not trigger UNIQUE constraint
-    previous_id TEXT UNIQUE,
+    -- previous event id
+    -- uuid; null for first event in entity instance; null does not trigger UNIQUE constraint
+    previous_id TEXT UNIQUE CHECK (event_id LIKE '________-____-4___-____-____________'),
+    -- uuid
+    event_id    TEXT  NOT NULL UNIQUE CHECK (event_id LIKE '________-____-4___-____-____________'),
+    ts_ms       INTEGER NOT NULL,
+    -- sequence for all events in all entities
     sequence    INTEGER PRIMARY KEY AUTOINCREMENT
 );
 
@@ -42,7 +43,6 @@ SELECT
     entity_key,
     event,
     data,
-    event_id,
     append_key,
     previous_id
 FROM ledger;
