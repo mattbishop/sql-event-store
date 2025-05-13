@@ -6,13 +6,15 @@ CREATE TABLE ledger
     entity_key  TEXT        NOT NULL,
     event       TEXT        NOT NULL,
     data        JSONB       NOT NULL,
-    event_id    UUID        NOT NULL UNIQUE,
+    -- can be anything, like a ULID, nanoid, etc.
     append_key  TEXT        NOT NULL UNIQUE,
-    -- previous event uuid; null for first event; null does not trigger UNIQUE constraint
+    -- previous event id
+    -- null for first event in entity instance; null does not trigger UNIQUE constraint
     previous_id UUID        UNIQUE,
+    event_id    UUID        NOT NULL UNIQUE,
     timestamp   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    -- ordering sequence
-    sequence   BIGSERIAL    PRIMARY KEY -- sequence for all events in all entities
+    -- sequence for all events in all entities
+    sequence   BIGSERIAL    PRIMARY KEY
 );
 
 CREATE INDEX entity_index ON ledger (entity, entity_key);
@@ -32,9 +34,9 @@ SELECT
     entity_key,
     event,
     data,
-    event_id,
     append_key,
-    previous_id
+    previous_id,
+    event_id
 FROM ledger;
 
 
@@ -50,14 +52,7 @@ FROM ledger ORDER BY sequence;
 
 
 CREATE FUNCTION replay_events_after(after_event_id UUID)
-    RETURNS TABLE (
-                      entity        TEXT,
-                      entity_key    TEXT,
-                      event         TEXT,
-                      data          JSONB,
-                      "timestamp"   TIMESTAMPTZ,
-                      event_id      UUID
-                  ) AS
+    RETURNS SETOF replay_events AS
 $$
 DECLARE
     after_sequence BIGINT;
@@ -112,7 +107,7 @@ CREATE TRIGGER generate_event_id_on_append
     EXECUTE PROCEDURE generate_event_id();
 
 
--- Can only use null previousId for first event in an entity
+-- Can only use null previousId for the first event in an entity
 CREATE FUNCTION check_first_event_for_entity() RETURNS trigger AS
 $$
 BEGIN
