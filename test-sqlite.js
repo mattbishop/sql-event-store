@@ -82,7 +82,8 @@ test('setup', async setup => {
       assert.end()
     })
 
-
+    // cannot use RETURNING to get the event_id, as sqlite cannot access the generated event_id during INSERT.
+    // Need to SELECT it like this.
     const appendStmt = db.prepare(`
 INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id)
     VALUES ($1, $2, $3, $4, $5, $6)
