@@ -55,7 +55,7 @@ CREATE FUNCTION replay_events_after(after_event_id UUID)
                       entity_key    TEXT,
                       event         TEXT,
                       data          JSONB,
-                      timestamp     TIMESTAMPTZ,
+                      "timestamp"   TIMESTAMPTZ,
                       event_id      UUID
                   ) AS
 $$
@@ -63,9 +63,9 @@ DECLARE
     after_sequence BIGINT;
 BEGIN
     -- Find the sequence number of the specified event_id
-    SELECT sequence INTO after_sequence
-    FROM ledger
-    WHERE event_id = after_event_id;
+    SELECT l.sequence INTO after_sequence
+    FROM ledger l
+    WHERE l.event_id = after_event_id;
 
     -- If event_id doesn't exist, raise an error
     IF after_sequence IS NULL THEN

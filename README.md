@@ -137,17 +137,17 @@ Appends to other entities do not affect each other, so many events can be append
 
 #### `ledger` Table
 
-| Column        | Notes                                                                                                                                                                                                              |
-|---------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `entity`      | The entity name.                                                                                                                                                                                                   |
-| `entity_key`  | The business identifier for the entity.                                                                                                                                                                            |
-| `event`       | The event name.                                                                                                                                                                                                    |
-| `data`        | The event data. Cannot be `null` but can be an empty string.                                                                                                                                                       |
-| `event_id`    | The event ID. This value is used by the next event as it's `previous_id` value to guard against a Lost Event problem. **AUTOPOPULATES—DO NOT INSERT.**                                                             |
+| Column        | Notes                                                        |
+| ------------- | ------------------------------------------------------------ |
+| `entity`      | The entity name.                                             |
+| `entity_key`  | The business identifier for the entity.                      |
+| `event`       | The event name.                                              |
+| `data`        | The event data. Cannot be `null` but can be an empty string. |
 | `append_key`  | The append key from the client. Database rules ensure an append key can only be used once. Can be a Command ID, or another client-generated unique key for the event append action. Useful for idempotent appends. |
-| `previous_id` | The event ID of the immediately-previous event for this entity. If this is the first event for an entity, then omit or send `NULL`.                                                                                |
-| `timestamp`   | The timestamp the event was inserted into the ledger.                                                                                                                                                              |
-| `sequence`    | Overall ledger position for an event.                                                                                                                                                                              |
+| `previous_id` | The event ID of the immediately-previous event for this entity. If this is the first event for an entity, then it’s value is `NULL`. |
+| `event_id`    | The event ID. This value is used by the next event append as it's `previous_id` value to guard against a Lost Event problem. It can also be used to select subsequent events during replay. **AUTOPOPULATES—DO NOT INSERT.** |
+| `timestamp`   | The timestamp the event was inserted into the ledger. **AUTOPOPULATES—DO NOT INSERT.** |
+| `sequence`    | Overall ledger position for an event. **AUTOPOPULATES—DO NOT INSERT.** |
 
 The `ledger` table is designed to allow multiple concurrent, uncoordinated writers to safely create events. It expects the client to know the difference between an entity's first event and subsequent events.
 

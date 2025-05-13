@@ -17,6 +17,17 @@ const tableTennisEntity = 'table-tennis'
 const pingEvent = 'ball-pinged'
 const pongEvent = 'ball-ponged'
 
+const thingKey = '1'
+const homeTableKey = 'home'
+const workTableKey = 'work'
+
+let thingEventId1
+let thingEventId2
+
+let pingEventHomeId
+let pingEventWorkId
+
+
 async function initDb() {
   const db = await PGlite.create('memory://')
   await loadDdl(db)
@@ -48,9 +59,6 @@ test('setup', async setup => {
   setup.test('insert events', t => {
     const stmt = query`INSERT INTO ledger (entity, entity_key, event, data, append_key, previous_id) 
 VALUES (${'entity'}, ${'entityKey'}, ${'event'}, ${'data'}, ${'appendKey'}, ${'previousId'})`
-    const thingKey = '1'
-    const homeTableKey = 'home'
-    const workTableKey = 'work'
 
     const appendKey1 = nanoid()
     const appendKey2 = nanoid()
@@ -101,12 +109,6 @@ VALUES (${'entity'}, ${'entityKey'}, ${'event'}, ${'data'}, ${'appendKey'}, ${'p
     const appendStmt = query`INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id)
         VALUES (${'entity'}, ${'entity_key'}, ${'event'}, ${'data'}, ${'append_key'}, ${'previous_id'})
         RETURNING event_id`
-
-    let thingEventId1
-    let thingEventId2
-
-    let pingEventHomeId
-    let pingEventWorkId
 
     t.test('insert events for an entity', async assert => {
       await assert.doesNotReject(async () => {
@@ -167,6 +169,30 @@ VALUES (${'entity'}, ${'entityKey'}, ${'event'}, ${'data'}, ${'appendKey'}, ${'p
         'cannot update events'
       )
       assert.end()
+    })
+  })
+
+
+  setup.test('replay events', t => {
+    t.test('replay entity events', async assert => {
+      const {rows} = await db.query(`SELECT * FROM replay_events WHERE entity = '${thingEntity}'`)
+      assert.equal(rows.length, 2, 'should have two events')
+      assert.end()
+    })
+
+    t.test('replay events for a specific entity', async assert => {
+      const {rows} = await db.query(`SELECT * FROM replay_events WHERE entity = '${tableTennisEntity}' AND entity_key = '${homeTableKey}'`)
+      assert.equal(rows.length, 1, 'should have one event')
+    })
+
+    t.test('replay events after a specific event', async assert => {
+      const {rows} = await db.query(`SELECT * FROM replay_events_after('${thingEventId1}')`)
+      assert.equal(rows.length, 3, 'should have three events')
+    })
+
+    t.test('replay events after a specific event, filtered by entity', async assert => {
+      const {rows} = await db.query(`SELECT * FROM replay_events_after('${thingEventId1}') WHERE entity = '${thingEntity}'`)
+      assert.equal(rows.length, 1, 'should have one event')
     })
   })
 
