@@ -196,7 +196,7 @@ VALUES (?, ?, ?, ?, ?);
 
 ##### Subsequent Events
 
-The `previous_id` is the `event_id` of the last event recorded for the entity.
+The `previous_id` is the `event_id` of the last event recorded for the specific entity.
 
 ```sql
 INSERT INTO append_event(entity,

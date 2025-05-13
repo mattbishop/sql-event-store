@@ -117,7 +117,7 @@ CREATE FUNCTION check_first_event_for_entity() RETURNS trigger AS
 $$
 BEGIN
     IF (NEW.previous_id IS NULL
-        AND EXISTS (SELECT 1
+        AND EXISTS (SELECT true
                     FROM ledger
                     WHERE NEW.entity_key = entity_key
                       AND NEW.entity = entity))
@@ -143,7 +143,7 @@ CREATE FUNCTION check_previous_id_in_same_entity() RETURNS trigger AS
 $$
 BEGIN
     IF (NEW.previous_id IS NOT NULL
-        AND NOT EXISTS (SELECT 1
+        AND NOT EXISTS (SELECT true
                         FROM ledger
                         WHERE NEW.previous_id = event_id
                           AND NEW.entity_key = entity_key

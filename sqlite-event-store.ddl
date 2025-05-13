@@ -98,7 +98,7 @@ CREATE TRIGGER first_event_for_entity
     ON ledger
     FOR EACH ROW
     WHEN NEW.previous_id IS NULL
-        AND EXISTS (SELECT 1
+        AND EXISTS (SELECT true
                     FROM ledger
                     WHERE NEW.entity_key = entity_key
                       AND NEW.entity = entity)
@@ -113,7 +113,7 @@ CREATE TRIGGER previous_id_in_same_entity
     ON ledger
     FOR EACH ROW
     WHEN NEW.previous_id IS NOT NULL
-        AND NOT EXISTS (SELECT 1
+        AND NOT EXISTS (SELECT true
                         FROM ledger
                         WHERE NEW.previous_id = event_id
                           AND NEW.entity_key = entity_key
