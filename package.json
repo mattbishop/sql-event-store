@@ -3,6 +3,7 @@
   "version": "2.0.0",
   "description": "Demonstration of a SQL event store with de-duplication and guaranteed ordering. This event store can be ported to most SQL RDBMS and accessed from an number of writers, including high-load serverless functions. ",
   "main": "test-sqlite.js",
+  "type": "module",
   "scripts": {
     "test": "test"
   },

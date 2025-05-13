@@ -16,6 +16,11 @@ const tableTennisEntity = 'table-tennis'
 const pingEvent = 'ball-pinged'
 const pongEvent = 'ball-ponged'
 
+const thingKey = '1'
+const homeTableKey = 'home'
+const workTableKey = 'work'
+
+
 async function initDb() {
   const SQL = await initSqlJs()
   const db = new SQL.Database()
@@ -40,10 +45,6 @@ test('setup', async setup => {
 
   setup.test('insert events', t => {
     const stmt = db.prepare('INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id) VALUES (?, ?, ?, ?, ?, ?)')
-
-    const thingKey = '1'
-    const homeTableKey = 'home'
-    const workTableKey = 'work'
 
     const appendKey1 = nanoid()
     const appendKey2 = nanoid()
@@ -136,6 +137,21 @@ INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_
         /Cannot update events in the ledger/,
         'cannot update events'
       )
+      assert.end()
+    })
+  })
+
+
+  setup.test('replay events', t => {
+    t.test('replay entity events', async assert => {
+      const [{values}] = await db.exec(`SELECT * FROM replay_events WHERE entity = '${thingEntity}'`)
+      assert.equal(values.length, 2, 'should have two events')
+      assert.end()
+    })
+
+    t.test('replay single entity event', async assert => {
+      const [{values}] = await db.exec(`SELECT * FROM replay_events WHERE entity = '${tableTennisEntity}' AND entity_key = '${homeTableKey}'`)
+      assert.equal(values.length, 1, 'should have one event')
       assert.end()
     })
   })

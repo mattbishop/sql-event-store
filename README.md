@@ -67,7 +67,9 @@ RETURNING event_id;
 
 ### Replaying Events
 
-One can replay events in order, without unhelpful data, by using the `replay_events` view. Here are examples:
+One can replay events in order, without unhelpful data, by using the `replay_events` view.
+
+Here are examples:
 
 ```sql
 -- Replay all the events
@@ -83,6 +85,15 @@ SELECT * FROM replay_events
 WHERE entity = 'game'
   AND entity_key = '2022 Classic'
   AND event IN ('game-started', 'game-finished');
+
+-- BEWARE the last event_id in this result set may not  be the last event for the entity instance, so it cannot be used to append
+-- an event. To find the last event for an entity, use this query:
+
+SELECT event_id FROM ledger
+WHERE entity = 'game'
+  AND entity_key = '2022 Classic'
+ORDER BY sequence DESC
+LIMIT 1;
 
 -- Catch up with events after a known event
 SELECT * FROM replay_events
