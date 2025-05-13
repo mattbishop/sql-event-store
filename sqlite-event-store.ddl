@@ -2,20 +2,20 @@
 
 CREATE TABLE ledger
 (
-    entity      TEXT NOT NULL,
-    entity_key  TEXT NOT NULL,
-    event       TEXT NOT NULL,
-    data        TEXT NOT NULL,
+    entity          TEXT NOT NULL,
+    entity_key      TEXT NOT NULL,
+    event           TEXT NOT NULL,
+    data            JSONB NOT NULL,
     -- can be anything, like a ULID, nanoid, etc.
-    append_key  TEXT NOT NULL UNIQUE,
+    append_key      TEXT NOT NULL UNIQUE,
     -- previous event id
     -- uuid; null for first event in entity instance; null does not trigger UNIQUE constraint
-    previous_id TEXT UNIQUE CHECK (event_id LIKE '________-____-4___-____-____________'),
+    previous_id     TEXT UNIQUE CHECK (event_id LIKE '________-____-4___-____-____________'),
     -- uuid
-    event_id    TEXT  NOT NULL UNIQUE CHECK (event_id LIKE '________-____-4___-____-____________'),
-    ts_ms       INTEGER NOT NULL,
+    event_id        TEXT  NOT NULL UNIQUE CHECK (event_id LIKE '________-____-4___-____-____________'),
+    timestamp       INTEGER NOT NULL,
     -- sequence for all events in all entities
-    sequence    INTEGER PRIMARY KEY AUTOINCREMENT
+    sequence        INTEGER PRIMARY KEY AUTOINCREMENT
 );
 
 CREATE INDEX entity_index ON ledger (entity, entity_key);
@@ -54,7 +54,7 @@ SELECT
     entity_key,
     event,
     data,
-    strftime('%Y-%m-%dT%H:%M:%fZ', ts_ms / 1000.0, 'unixepoch') AS timestamp,
+    strftime('%Y-%m-%dT%H:%M:%fZ', timestamp / 1000.0, 'unixepoch') AS timestamp,
     event_id
 FROM ledger ORDER BY sequence;
 
@@ -80,15 +80,15 @@ CREATE TRIGGER generate_event_id_on_append
     ON append_event
     FOR EACH ROW
 BEGIN
-    INSERT INTO ledger (entity, entity_key, event, data, event_id, ts_ms, append_key, previous_id)
+    INSERT INTO ledger (entity, entity_key, event, data, append_key, previous_id, event_id, timestamp)
     VALUES (NEW.entity,
             NEW.entity_key,
             NEW.event,
             NEW.data,
-            (SELECT next FROM uuid4),
-            CAST((UNIXEPOCH('subsec') * 1000) AS INTEGER),
             NEW.append_key,
-            NEW.previous_id);
+            NEW.previous_id,
+            (SELECT next FROM uuid4),
+            CAST((UNIXEPOCH('subsec') * 1000) AS INTEGER));
 END;
 
 
