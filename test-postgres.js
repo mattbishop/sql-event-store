@@ -106,9 +106,7 @@ VALUES (${'entity'}, ${'entityKey'}, ${'event'}, ${'data'}, ${'appendKey'}, ${'p
       assert.end()
     })
 
-    const appendStmt = query`INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id)
-        VALUES (${'entity'}, ${'entity_key'}, ${'event'}, ${'data'}, ${'append_key'}, ${'previous_id'})
-        RETURNING event_id`
+    const appendStmt = query`SELECT append_event (${'entity'}, ${'entity_key'}, ${'event'}, ${'data'}, ${'append_key'}, ${'previous_id'}) AS event_id`
 
     t.test('insert events for an entity', async assert => {
       await assert.doesNotReject(async () => {

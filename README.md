@@ -47,29 +47,45 @@ The Postgres test uses [PGlite](https://pglite.dev), a WASM build of Postgres, w
 
 ## Usage Model
 
-Both SQLite and Postgres versions have the same SQL usage model.
+Both SQLite and Postgres versions have similar SQL usage models, but with one main difference. Postgres provides functions, whereas SQLite only has views. The concepts and naming are similar between the two databases, but slightly different in their use and capabilities.
 
 ### Appending Events
 
-In order to manage the business rules of an event ledger, one must append events by inserting into the `append_event` view. Here is an example:
+In order to manage the business rules of an event-sourced application, one must append events to the ledger.
 
-```sql
+#### SQLite
+
+Append new events by inserting into the `append_event` view. Here is an example:
+
+```sqlite
 -- Add an event. Note the RETURNING clause, which returns the generated event_id for the appended event. This is used to append the next event.
 INSERT INTO append_event (entity, entity_key, event, data, append_key) -- first event in entity, omit previous_id
-VALUES ('game', 'apr-7-2025', 'game started','true', 'an append key')
-RETURNING event_id;
+VALUES ('game', 'apr-7-2025', 'game started','true', 'an-append-key')
+RETURNING (SELECT event_id FROM ledger WHERE append_key = 'an-append-key') as event_id;
 
--- now insert another event
+-- now insert another event, using the first event's id as the previous_id value
 INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id)
 VALUES ('game', 'apr-7-2025', 'game going','true', 'another-append-key', '019612a6-38ac-7108-85fd-33e8081cedaf')
-RETURNING event_id;
+RETURNING (SELECT event_id FROM ledger WHERE append_key = 'another-append-key') as event_id;
+```
+
+#### Postgres
+
+Append new events by calling the `append_event` function. Here is an example:
+
+```postgresql
+-- Add an event. This function returns the generated event_id for the appended event.
+SELECT append_event ('game', 'apr-7-2025', 'game started','true', 'an-append-key', null);
+
+-- now insert another event, using the first event's id as the previous_id value
+SELECT append_event ('game', 'apr-7-2025', 'game going','true', 'another-append-key', '019612a6-38ac-7108-85fd-33e8081cedaf');
 ```
 
 ### Replaying Events
 
 One can replay events in order, without unhelpful data, by using the `replay_events` view.
 
-Here are examples:
+#### SQLite / Postgres
 
 ```sql
 -- Replay all the events
@@ -86,8 +102,8 @@ WHERE entity = 'game'
   AND entity_key = '2022 Classic'
   AND event IN ('game-started', 'game-finished');
 
--- BEWARE the last event_id in this result set may not  be the last event for the entity instance, so it cannot be used to append
--- an event. To find the last event for an entity, use this query:
+-- BEWARE the last event_id in this result set may not  be the last event for the entity instance, so it
+-- cannot be used to append an event. To find the last event for an entity, use this query:
 
 SELECT event_id FROM ledger
 WHERE entity = 'game'
@@ -99,7 +115,6 @@ LIMIT 1;
 SELECT * FROM replay_events
 WHERE entity = 'game' 
   AND entity_key = '2022 Classic'
-  -- Works for both SQLite and Postgres; see below for simpler Postgres version
   AND sequence > (SELECT sequence
                   FROM ledger
                   WHERE event_id = '123e4567-e89b-12d3-a456-426614174000');

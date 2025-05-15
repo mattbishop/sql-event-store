@@ -28,16 +28,20 @@ CREATE RULE ignore_update_events AS ON UPDATE TO ledger
     DO INSTEAD NOTHING;
 
 
-CREATE VIEW append_event AS
-SELECT
-    entity,
-    entity_key,
-    event,
-    data,
-    append_key,
-    previous_id,
-    event_id
-FROM ledger;
+CREATE FUNCTION append_event(entity_in          TEXT,
+                             entity_key_in      TEXT,
+                             event_in           TEXT,
+                             data_in            JSONB,
+                             append_key_in      TEXT,
+                             previous_id_in     UUID DEFAULT NULL)
+RETURNS UUID AS
+$$
+    INSERT INTO ledger (entity, entity_key, event, data, append_key, previous_id)
+    VALUES (entity_in, entity_key_in, event_in, data_in, append_key_in, previous_id_in)
+    RETURNING event_id;
+$$
+LANGUAGE sql;
+
 
 
 CREATE VIEW replay_events AS
