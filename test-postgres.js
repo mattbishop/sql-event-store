@@ -85,7 +85,7 @@ VALUES (${'entity'}, ${'entityKey'}, ${'event'}, ${'data'}, ${'appendKey'}, ${'p
       await assert.rejects(
         () => db.query(stmt.query, [thingEntity, thingKey, thingCreatedEvent, data, null, null]),
         /error: null value in column "append_key" of relation "ledger" violates not-null constraint/,
-        'cannot insert null command')
+        'cannot insert null append_key')
       assert.end()
     })
 
@@ -137,6 +137,10 @@ VALUES (${'entity'}, ${'entityKey'}, ${'event'}, ${'data'}, ${'appendKey'}, ${'p
         () => db.query(appendStmt.query, [tableTennisEntity, workTableKey, pongEvent, data, nanoid(), pingEventHomeId]),
         /error: previous_id must be in the same entity/,
         'previous_id must be in same entity')
+      await assert.rejects(
+          () => db.query(appendStmt.query, [thingEntity, thingKey, thingCreatedEvent, data, nanoid(), thingEventId1]),
+          /error: previous_id must reference the newest event in entity/,
+          'previous ID must be newest event in entity')
       assert.end()
     })
 
@@ -144,10 +148,10 @@ VALUES (${'entity'}, ${'entityKey'}, ${'event'}, ${'data'}, ${'appendKey'}, ${'p
       await assert.rejects(
         () => db.query(appendStmt.query, [thingEntity, thingKey, thingDeletedEvent, data, appendKey1, thingEventId2]),
         /error: duplicate key value violates unique constraint "ledger_append_key_key"/,
-        'cannot insert different event for same command')
+        'cannot insert different event for same append_key')
       await assert.rejects(
         () => db.query(appendStmt.query, [thingEntity, thingKey, thingDeletedEvent, data, nanoid(), thingEventId1]),
-        /error: duplicate key value violates unique constraint "ledger_previous_id_key"/,
+        /error: previous_id must reference the newest event in entity/,
         'cannot insert different event for same previous')
       assert.end()
     })

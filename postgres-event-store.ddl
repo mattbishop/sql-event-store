@@ -137,27 +137,42 @@ CREATE TRIGGER first_event_for_entity
 
 
 
--- previous_id must be in the same entity as the event
-CREATE FUNCTION check_previous_id_in_same_entity() RETURNS trigger AS
+
+-- check previous_id rules
+CREATE FUNCTION check_append_with_previous_id() RETURNS trigger AS
 $$
 BEGIN
-    IF (NEW.previous_id IS NOT NULL
-        AND NOT EXISTS (SELECT true
-                        FROM ledger
-                        WHERE NEW.previous_id = event_id
-                          AND NEW.entity_key = entity_key
-                          AND NEW.entity = entity))
+    IF (NOT EXISTS (SELECT true
+                    FROM ledger
+                    WHERE NEW.previous_id = event_id
+                      AND NEW.entity_key = entity_key
+                      AND NEW.entity = entity))
     THEN
         RAISE EXCEPTION 'previous_id must be in the same entity';
     END IF;
+
+    IF (EXISTS (SELECT true
+                FROM ledger l1
+                WHERE NEW.previous_id = l1.event_id
+                  AND l1.sequence < (SELECT MAX(l2.sequence)
+                                     FROM ledger l2
+                                     WHERE NEW.entity = l2.entity
+                                       AND NEW.entity_key = l2.entity_key)
+
+    ))
+    THEN
+        RAISE EXCEPTION 'previous_id must reference the newest event in entity';
+    END IF;
+
     RETURN NEW;
 END
 $$
 LANGUAGE plpgsql;
 
 
-CREATE TRIGGER previous_id_in_same_entity
+CREATE TRIGGER append_with_previous_id
     BEFORE INSERT
     ON ledger
     FOR EACH ROW
-    EXECUTE FUNCTION check_previous_id_in_same_entity();
+    WHEN (NEW.previous_id IS NOT NULL)
+    EXECUTE FUNCTION check_append_with_previous_id();

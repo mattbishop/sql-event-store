@@ -115,7 +115,7 @@ CREATE TRIGGER previous_id_is_latest_in_entity
     WHEN NEW.previous_id IS NOT NULL
         AND EXISTS (SELECT true
                     FROM ledger l1
-                    WHERE NEW.previous_id == l1.event_id
+                    WHERE NEW.previous_id = l1.event_id
                       AND l1.sequence < (SELECT MAX(l2.sequence)
                                           FROM ledger l2
                                           WHERE NEW.entity = l2.entity
