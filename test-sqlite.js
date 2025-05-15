@@ -106,21 +106,21 @@ INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_
         () => stmt.run([tableTennisEntity, workTableKey, pongEvent, data, nanoid(), pingEventHomeId]),
         /previous_id must be in same entity/,
         'previous ID must be in same entity')
+      assert.throws(
+        () => stmt.run([thingEntity, thingKey, thingCreatedEvent, data, nanoid(), thingEventId1]),
+        /previous_id must reference the newest event in entity/,
+        'previous ID must be newest event in entity')
       assert.end()
     })
 
     t.test('Cannot insert duplicates', assert => {
-      assert.throws( // ?? this test seems odd
-        () => stmt.run([thingEntity, thingKey, thingCreatedEvent, data, appendKey2, thingEventId1]),
-        /UNIQUE constraint failed/,
-        'cannot insert complete duplicate event')
       assert.throws(
         () => stmt.run([thingEntity, thingKey, thingDeletedEvent, data, appendKey1, thingEventId2]),
         /UNIQUE constraint failed: ledger\.append_key/,
         'cannot insert different event for same append key')
       assert.throws(
         () => stmt.run([thingEntity, thingKey, thingDeletedEvent, data, nanoid(), thingEventId1]),
-        /UNIQUE constraint failed: ledger\.previous_id/,
+        /previous_id must reference the newest event in entity/,
         'cannot insert different event for same previous ID')
       assert.end()
     })

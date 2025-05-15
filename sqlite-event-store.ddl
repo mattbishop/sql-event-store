@@ -107,6 +107,24 @@ BEGIN
 END;
 
 
+-- previous_id must be the newest event for the entity.
+CREATE TRIGGER previous_id_is_latest_in_entity
+    BEFORE INSERT
+    ON ledger
+    FOR EACH ROW
+    WHEN NEW.previous_id IS NOT NULL
+        AND EXISTS (SELECT true
+                    FROM ledger l1
+                    WHERE NEW.previous_id == l1.event_id
+                      AND l1.sequence < (SELECT MAX(l2.sequence)
+                                          FROM ledger l2
+                                          WHERE NEW.entity = l2.entity
+                                            AND NEW.entity_key = l2.entity_key))
+BEGIN
+    SELECT RAISE(FAIL, 'previous_id must reference the newest event in entity');
+END;
+
+
 -- previous_id must be in the same entity as the event
 CREATE TRIGGER previous_id_in_same_entity
     BEFORE INSERT
