@@ -55,12 +55,12 @@ Append new events by inserting into the `append_event` view. Here is an example:
 -- Add an event. Note the RETURNING clause, which returns the generated event_id for the appended event. This is used to append the next event.
 INSERT INTO append_event (entity, entity_key, event, data, append_key) -- first event in entity, omit previous_id
 VALUES ('game', 'apr-7-2025', 'game started','true', 'an-append-key')
-RETURNING (SELECT event_id FROM ledger WHERE append_key = 'an-append-key') as event_id;
+RETURNING (SELECT event_id FROM ledger WHERE append_key = 'an-append-key');
 
 -- now insert another event, using the first event's id as the previous_id value
 INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id)
 VALUES ('game', 'apr-7-2025', 'game going','true', 'another-append-key', '019612a6-38ac-7108-85fd-33e8081cedaf')
-RETURNING (SELECT event_id FROM ledger WHERE append_key = 'another-append-key') as event_id;
+RETURNING (SELECT event_id FROM ledger WHERE append_key = 'another-append-key');
 ```
 
 #### Postgres
@@ -102,9 +102,16 @@ WHERE entity = 'game'
 SELECT event_id FROM ledger
 WHERE entity = 'game'
   AND entity_key = '2022 Classic'
-ORDER BY sequence DESC
-LIMIT 1;
+ORDER BY sequence DESC LIMIT 1;
+```
 
+### Catching Up With New Events
+
+Your application may want to “catch up” from a previously-read event and avoid replaying already-seen events. SQLite and Postgres have different mechanisms to do so.
+
+#### Catching Up With SQLite
+
+```sql
 -- Catch up with events after a known event
 SELECT * FROM replay_events
 WHERE entity = 'game' 
@@ -114,9 +121,11 @@ WHERE entity = 'game'
                   WHERE event_id = '123e4567-e89b-12d3-a456-426614174000');
 ```
 
-### Catching Up With Postgres
+The last `WHERE event_id` portion will contain the most recent event processed by your application, and the point in the events where you want to continue from.
 
-Replaying events to catch up after a previous event is a bit easier with Postgres, since it has stored functions.
+#### Catching Up With Postgres
+
+Replaying events to catch up after a previous event is a bit easier with Postgres, since it has stored functions. The function `replay_events_after` accepts the event ID of the most recent event processed by your application. It returns the same fields as the `replay_events` view described above..
 
 ```sql
 -- Catch up on new events from a specific entity, after a specific event
@@ -125,6 +134,8 @@ SELECT * FROM replay_events_after('123e4567-e89b-12d3-a456-426614174000')
 WHERE entity = 'game' 
   AND entity_key = '2922';
 ```
+
+Notice how your application can add WHERE clauses in the replay query to filter for relevant events.
 
 ### Conceptual Model
 
@@ -195,6 +206,7 @@ Two types of events can be appended into the event log. The first event for an e
 In this case, the `previous_id` does not exist, so it is omitted from the insert statement.
 
 ```sql
+-- SQLite version, see above for Postgres
 INSERT INTO append_event(entity,
                          entity_key,
                          event,
@@ -208,6 +220,7 @@ VALUES (?, ?, ?, ?, ?);
 The `previous_id` is the `event_id` of the last event recorded for the specific entity.
 
 ```sql
+-- SQLite version, see above for Postgres
 INSERT INTO append_event(entity,
                          entity_key,
                          event,
@@ -217,5 +230,4 @@ INSERT INTO append_event(entity,
 VALUES (?, ?, ?, ?, ?, ?);
 ```
 
-If another event in this entity has been appended using this previous_id, the database will reject the insert and require your application to replay newer events to verify the entity state.
-
+If another event in this entity has been appended using this previous_id, the database will reject the insert and require your application to replay newer events to verify the entity state. Also, if the entity instance has newer events than previous_id, the append will be rejected. [Catch up](#catching-up-with-new-events) with the newest events and run the append again if appropriate.
