@@ -51,7 +51,7 @@ In order to manage the business rules of an event-sourced application, one must 
 
 Append new events by inserting into the `append_event` view. Here is an example:
 
-```sqlite
+```sql
 -- Add an event. Note the RETURNING clause, which returns the generated event_id for the appended event. This is used to append the next event.
 INSERT INTO append_event (entity, entity_key, event, data, append_key) -- first event in entity, omit previous_id
 VALUES ('game', 'apr-7-2025', 'game started','true', 'an-append-key')
@@ -67,7 +67,7 @@ RETURNING (SELECT event_id FROM ledger WHERE append_key = 'another-append-key') 
 
 Append new events by calling the `append_event` function. Here is an example:
 
-```postgresql
+```sql
 -- Add an event. This function returns the generated event_id for the appended event.
 SELECT append_event ('game', 'apr-7-2025', 'game started','true', 'an-append-key', null);
 
@@ -118,7 +118,7 @@ WHERE entity = 'game'
 
 Replaying events to catch up after a previous event is a bit easier with Postgres, since it has stored functions.
 
-```postgresql
+```sql
 -- Catch up on new events from a specific entity, after a specific event
 -- Postgres-only
 SELECT * FROM replay_events_after('123e4567-e89b-12d3-a456-426614174000')
