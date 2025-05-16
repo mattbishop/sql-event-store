@@ -111,15 +111,14 @@ CREATE TRIGGER generate_event_id_on_append
     EXECUTE PROCEDURE generate_event_id();
 
 
--- Can only use null previousId for the first event in an entity
+
 CREATE FUNCTION check_first_event_for_entity() RETURNS trigger AS
 $$
 BEGIN
-    IF (NEW.previous_id IS NULL
-        AND EXISTS (SELECT true
-                    FROM ledger
-                    WHERE NEW.entity_key = entity_key
-                      AND NEW.entity = entity))
+    IF EXISTS (SELECT true
+               FROM ledger
+               WHERE NEW.entity_key = entity_key
+                 AND NEW.entity = entity)
     THEN
         RAISE EXCEPTION 'previous_id can only be null for first entity event';
     END IF;
@@ -129,10 +128,11 @@ $$
 LANGUAGE plpgsql;
 
 
-CREATE TRIGGER first_event_for_entity
+CREATE TRIGGER append_first_event_for_entity
     BEFORE INSERT
     ON ledger
     FOR EACH ROW
+    WHEN (NEW.previous_id IS NULL)
     EXECUTE PROCEDURE check_first_event_for_entity();
 
 
