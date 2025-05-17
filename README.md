@@ -5,39 +5,7 @@ This project uses a node test suite to ensure the DDLs comply with the design re
 
 ### Installing
 
-Good news! Nothing to install! Instead, take the DDLs in this project ([Postgres](https://www.postgresql.org), [SQLite](https://sqlite.org)) and include them in your application’s database definition set.
-
-## Running Tests
-
-Running tests is not necessary but interesting to validate the correctness of the DDLs. One must have [Node](https://nodejs.org) installed (Node 22 is what I used) and then:
-
-```bash
-> npm install
-```
-
-Once it has finished installing the dependencies, run the test for the database you are interested in.
-
-### SQLite Event Store
-
-The [SQLite version](./sqlite-event-store.ddl) of SQL event store was built and tested with SQLite 3.49; it should run on recent versions of SQLite, at least since 2023.
-
-```bash
-> node test-sqlite.js
-```
-
-The SQLite test uses [sql.js](https://github.com/kripken/sql.js), the WASM build of SQLite for reliable compilation and test execution. The test will dump the test database to `sqlite-store.db` for your examination.
-
-### Postgres Event Store
-
-The [Postgres version](./postgres-event-store.ddl) of SQL event store has the same behavior as the SQLite version. It was built and tested on Postgres 17 but can be used in other versions.
-
-The Postgres version can be tested with the [test-postgres.js]() script. Run this file instead of `test-sqlite.js`. It does not need a running Postgres server. Instead, it uses [pglite](https://pglite.dev), a WASM compilation of Postgres 17.
-
-```bash
-> node test-postgres.js
-```
-
-The script will dump the test ledger table to `postgres-store.tsv` for your inspection.
+Good news! Nothing to install! Instead, take the DDLs in this project ([Postgres](./postgres-event-store.ddl), [SQLite](./sqlite-event-store.ddl)) and include them in your application’s database definition set.
 
 ## Usage Model
 
@@ -132,7 +100,7 @@ Replaying events to catch up after a previous event is a bit easier with Postgre
 -- Postgres-only
 SELECT * FROM replay_events_after('123e4567-e89b-12d3-a456-426614174000')
 WHERE entity = 'game' 
-  AND entity_key = '2922';
+  AND entity_key = '2022 Classic';
 ```
 
 Notice how your application can add WHERE clauses in the replay query to filter for relevant events.
@@ -152,26 +120,6 @@ Appends to other entities do not affect each other, so many events can be append
 - **Append-Only** Once events are created, they cannot be deleted, updated or otherwise modified. This includes entity event definitions.
 - **Insertion-Ordered** Events must be consistently replayable in the order they were inserted.
 - **Event race conditions are Impossible** The event store prevents a client from writing an event to an entity if another event has been inserted after the client has replayed an event stream.
-
-### SQL Table Structure
-
-#### `ledger` Table
-
-| Column        | Notes                                                        |
-| ------------- | ------------------------------------------------------------ |
-| `entity`      | The entity name.                                             |
-| `entity_key`  | The business identifier for the entity.                      |
-| `event`       | The event name.                                              |
-| `data`        | The event data. Cannot be `null` but can be an empty string. |
-| `append_key`  | The append key from the client. Database rules ensure an append key can only be used once. Can be a Command ID, or another client-generated unique key for the event append action. Useful for idempotent appends. |
-| `previous_id` | The event ID of the immediately-previous event for this entity. If this is the first event for an entity, then it’s value is `NULL`. |
-| `event_id`    | The event ID. This value is used by the next event append as it's `previous_id` value to guard against a Lost Event problem. It can also be used to select subsequent events during replay. **AUTOPOPULATES—DO NOT INSERT.** |
-| `timestamp`   | The timestamp the event was inserted into the ledger. **AUTOPOPULATES—DO NOT INSERT.** |
-| `sequence`    | Overall ledger position for an event. **AUTOPOPULATES—DO NOT INSERT.** |
-
-The `ledger` table is designed to allow multiple concurrent, uncoordinated writers to safely create events. It expects the client to know the difference between an entity's first event and subsequent events.
-
-Multiple constraints are applied to this table to ensure bad events do not make their way into the system. This includes duplicated events and append keys, and ensured sequential events.
 
 ### Client Use Cases
 
@@ -231,3 +179,55 @@ VALUES (?, ?, ?, ?, ?, ?);
 ```
 
 If another event in this entity has been appended using this previous_id, the database will reject the insert and require your application to replay newer events to verify the entity state. Also, if the entity instance has newer events than previous_id, the append will be rejected. [Catch up](#catching-up-with-new-events) with the newest events and run the append again if appropriate.
+
+### SQL Table Structure
+
+#### `ledger` Table
+
+| Column        | Notes                                                        |
+| ------------- | ------------------------------------------------------------ |
+| `entity`      | The entity name.                                             |
+| `entity_key`  | The business identifier for the entity.                      |
+| `event`       | The event name.                                              |
+| `data`        | The event data. Cannot be `null` but can be an empty string. |
+| `append_key`  | The append key from the client. Database rules ensure an append key can only be used once. Can be a Command ID, or another client-generated unique key for the event append action. Useful for idempotent appends. |
+| `previous_id` | The event ID of the immediately-previous event for this entity. If this is the first event for an entity, then it’s value is `NULL`. |
+| `event_id`    | The event ID. This value is used by the next event append as it's `previous_id` value to guard against a Lost Event problem. It can also be used to select subsequent events during replay. **AUTOPOPULATES—DO NOT INSERT.** |
+| `timestamp`   | The timestamp the event was inserted into the ledger. **AUTOPOPULATES—DO NOT INSERT.** |
+| `sequence`    | Overall ledger position for an event. **AUTOPOPULATES—DO NOT INSERT.** |
+
+The `ledger` table is designed to allow multiple concurrent, uncoordinated writers to safely create events. It expects the client to know the difference between an entity's first event and subsequent events.
+
+Multiple constraints are applied to this table to ensure bad events do not make their way into the system. This includes duplicated events and append keys, and ensured sequential events.
+
+## Running Tests
+
+Running tests is not necessary but interesting to validate the correctness of the DDLs. One must have [Node](https://nodejs.org) installed (Node 22 is what I used) and then:
+
+```bash
+> npm install
+```
+
+Once it has finished installing the dependencies, run the test for the database you are interested in.
+
+### SQLite Event Store
+
+The [SQLite version](./sqlite-event-store.ddl) of SQL event store was built and tested with SQLite 3.49; it should run on recent versions of SQLite, at least since 2023.
+
+```bash
+> node test-sqlite.js
+```
+
+The SQLite test uses [sql.js](https://github.com/kripken/sql.js), the WASM build of SQLite for reliable compilation and test execution. The test will dump the test database to `sqlite-store.db` for your examination.
+
+### Postgres Event Store
+
+The [Postgres version](./postgres-event-store.ddl) of SQL event store has the same behavior as the SQLite version. It was built and tested on Postgres 17 but can be used in other versions.
+
+The Postgres version can be tested with the [test-postgres.js]() script. Run this file instead of `test-sqlite.js`. It does not need a running Postgres server. Instead, it uses [pglite](https://pglite.dev), a WASM compilation of Postgres 17.
+
+```bash
+> node test-postgres.js
+```
+
+The script will dump the test ledger table to `postgres-store.tsv` for your inspection.
