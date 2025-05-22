@@ -215,7 +215,7 @@ Once it has finished installing the dependencies, run the test for the database 
 The [SQLite version](./sqlite-event-store.ddl) of SQL event store was built and tested with SQLite 3.49; it should run on recent versions of SQLite, at least since 2023.
 
 ```bash
-> node test-sqlite.js
+> node --test test-sqlite.js
 ```
 
 The SQLite test uses [sql.js](https://github.com/kripken/sql.js), the WASM build of SQLite for reliable compilation and test execution. The test will dump the test database to `sqlite-store.db` for your examination.
@@ -227,7 +227,7 @@ The [Postgres version](./postgres-event-store.ddl) of SQL event store has the sa
 The Postgres version can be tested with the [test-postgres.js]() script. Run this file instead of `test-sqlite.js`. It does not need a running Postgres server. Instead, it uses [pglite](https://pglite.dev), a WASM compilation of Postgres 17.
 
 ```bash
-> node test-postgres.js
+> node --test test-postgres.js
 ```
 
 The script will dump the test ledger table to `postgres-store.tsv` for your inspection.
