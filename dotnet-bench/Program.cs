@@ -5,6 +5,7 @@ using Microsoft.Data.Sqlite;
 using Npgsql;
 using NpgsqlTypes;
 using Spectre.Console;
+using System.Globalization;
 
 internal class Program
 {
@@ -12,6 +13,7 @@ internal class Program
     private const string SqlServerConnectionString = "Server=localhost,1433;Database=eventstore;User Id=sa;Password=EventStore!2025;TrustServerCertificate=true;";
     private const string PostgresConnectionString = "Host=localhost;Port=5432;Database=eventstore;Username=postgres;Password=EventStore!2025;";
     private const string SqliteConnectionString = "Data Source=sqlite-store.db";
+    private static readonly string Payload = BuildPayload();
 
     private static async Task Main(string[] args)
     {
@@ -77,7 +79,7 @@ internal class Program
             cmd.Parameters.AddWithValue("@entity", entity);
             cmd.Parameters.AddWithValue("@entity_key", entityKey);
             cmd.Parameters.AddWithValue("@event", "bench-event");
-            cmd.Parameters.AddWithValue("@data", "{}");
+            cmd.Parameters.AddWithValue("@data", Payload);
             cmd.Parameters.AddWithValue("@append_key", Guid.NewGuid().ToString());
             cmd.Parameters.Add("@previous_id", SqlDbType.UniqueIdentifier).Value = (object?)previousId ?? DBNull.Value;
             cmd.Parameters.Add("@timestamp", SqlDbType.DateTimeOffset).Value = DBNull.Value;
@@ -122,7 +124,7 @@ internal class Program
             cmd.Parameters.AddWithValue("entity", entity);
             cmd.Parameters.AddWithValue("entity_key", entityKey);
             cmd.Parameters.AddWithValue("event", "bench-event");
-            cmd.Parameters.AddWithValue("data", "{}");
+            cmd.Parameters.AddWithValue("data", Payload);
             cmd.Parameters.AddWithValue("append_key", Guid.NewGuid().ToString());
             cmd.Parameters.Add("previous_id", NpgsqlDbType.Uuid).Value = (object?)previousId ?? DBNull.Value;
 
@@ -166,7 +168,7 @@ internal class Program
             cmd.Parameters.AddWithValue("$entity", entity);
             cmd.Parameters.AddWithValue("$entity_key", entityKey);
             cmd.Parameters.AddWithValue("$event", "bench-event");
-            cmd.Parameters.AddWithValue("$data", "{}");
+            cmd.Parameters.AddWithValue("$data", Payload);
             cmd.Parameters.AddWithValue("$append_key", Guid.NewGuid().ToString());
             cmd.Parameters.AddWithValue("$previous_id", (object?)previousId ?? DBNull.Value);
 
@@ -198,6 +200,17 @@ internal class Program
     }
 
     private record BenchmarkResult(string Backend, int Inserted, long InsertMs, long ReadMs, int ReadCount);
+
+    private static string BuildPayload()
+    {
+        var s1 = new string('A', 180);
+        var s2 = new string('B', 160);
+        var s3 = new string('C', 140);
+        const decimal price = 12345.67m;
+        const int quantity = 42;
+        var priceStr = price.ToString(CultureInfo.InvariantCulture);
+        return $"{{\"s1\":\"{s1}\",\"s2\":\"{s2}\",\"s3\":\"{s3}\",\"price\":{priceStr},\"qty\":{quantity}}}";
+    }
 
     private static (string? Backend, int? Count) ParseArgs(string[] args)
     {
