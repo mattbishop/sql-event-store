@@ -75,7 +75,7 @@ BEGIN
     SET XACT_ABORT ON;
 
     BEGIN TRY
-        -- Flag setzen
+        -- set session flag
         EXEC sys.sp_set_session_context 
             @key = N'allow_direct_ledger_insert', 
             @value = 1;
@@ -143,7 +143,7 @@ BEGIN
 
         COMMIT TRAN;
 
-        -- Flag wieder löschen
+        -- clear session flag
         EXEC sys.sp_set_session_context 
             @key = N'allow_direct_ledger_insert', 
             @value = NULL;
@@ -152,7 +152,7 @@ BEGIN
         IF XACT_STATE() <> 0
             ROLLBACK TRAN;
 
-        -- Flag IMMER löschen, auch im Fehlerfall
+        -- always clear session flag even on error
         EXEC sys.sp_set_session_context 
             @key = N'allow_direct_ledger_insert', 
             @value = NULL;
