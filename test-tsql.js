@@ -320,6 +320,19 @@ test('T-SQL', async (ctx) => {
         'cannot insert null append_key')
     })
 
+    await t.test('cannot insert directly into ledger', async () => {
+      // Direct INSERT must be blocked by no_direct_insert_ledger trigger
+      await rejects(
+        async () => {
+          await pool.request().query(`
+            INSERT INTO ledger (entity, entity_key, event, data, append_key)
+            VALUES ('${thingEntity}', '${thingKey}', 'test-event', '{}', '${nanoid()}')
+          `)
+        },
+        /Use append_event procedure to insert events into the ledger/,
+        'direct insert into ledger must fail')
+    })
+
     await t.test('UUIDs format for IDs', async () => {
       // T-SQL: UNIQUEIDENTIFIER type validation
       await rejects(
@@ -394,6 +407,39 @@ test('T-SQL', async (ctx) => {
           .execute('append_event')
         pingEventWorkId = result.output.event_id.toString()
       })
+    })
+
+    await t.test('first event per stream enforced', async () => {
+      const streamEntity = 'unique-stream'
+      const streamKey = nanoid()
+      const data = '{}'
+
+      await doesNotReject(async () => {
+        await pool.request()
+          .input('entity', sql.NVarChar, streamEntity)
+          .input('entity_key', sql.NVarChar, streamKey)
+          .input('event', sql.NVarChar, 'stream-created')
+          .input('data', sql.NVarChar, data)
+          .input('append_key', sql.NVarChar, nanoid())
+          .input('previous_id', sql.UniqueIdentifier, null)
+          .output('event_id', sql.UniqueIdentifier)
+          .execute('append_event')
+      })
+
+      await rejects(
+        async () => {
+          await pool.request()
+            .input('entity', sql.NVarChar, streamEntity)
+            .input('entity_key', sql.NVarChar, streamKey)
+            .input('event', sql.NVarChar, 'stream-created-again')
+            .input('data', sql.NVarChar, data)
+            .input('append_key', sql.NVarChar, nanoid())
+            .input('previous_id', sql.UniqueIdentifier, null)
+            .output('event_id', sql.UniqueIdentifier)
+            .execute('append_event')
+        },
+        /previous_id can only be null for first entity event|uq_first_event_per_stream/,
+        'second first-event for same stream must fail')
     })
 
     await t.test('previous_id rules', async () => {
@@ -525,8 +571,10 @@ test('T-SQL', async (ctx) => {
       // ORDER BY must be in the query, not in the function (T-SQL limitation)
       const result = await pool.request()
         .input('after_event_id', sql.UniqueIdentifier, thingEventId1)
-        .query(`SELECT * FROM fn_replay_events_after(@after_event_id) ORDER BY sequence`)
-      strictEqual(result.recordset.length, 3, 'should have three events')
+        .input('entity', sql.NVarChar, thingEntity)
+        .input('entity_key', sql.NVarChar, thingKey)
+        .query(`SELECT * FROM fn_replay_events_after(@after_event_id) WHERE entity = @entity AND entity_key = @entity_key ORDER BY sequence`)
+      strictEqual(result.recordset.length, 1, 'should have one event after first')
     })
 
     await t.test('replay events after a specific event, filtered by entity', async () => {
