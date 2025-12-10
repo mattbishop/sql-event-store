@@ -100,20 +100,26 @@ const config = {
  * This ensures the database is completely reinitialized when DDL changes.
  */
 async function restartDockerContainer() {
-  const dockerComposePath = join(process.cwd(), 'T-SQL', 'docker-compose.yml')
-  const dockerComposeDir = join(process.cwd(), 'T-SQL')
+  const dockerComposePath = join(process.cwd(), 'docker-compose.yml')
+  const dockerComposeDir = process.cwd()
   
   try {
     // Stop and remove containers and volumes
     console.log('Stopping Docker containers and removing volumes...')
-    execSync('docker-compose down -v', { 
+    execSync(`docker-compose -f "${dockerComposePath}" down -v`, {
       cwd: dockerComposeDir,
       stdio: 'inherit'
     })
+    // Ensure old sqlserver container with fixed name is removed (avoid name conflict)
+    try {
+      execSync('docker rm -f sql-event-store', { stdio: 'ignore' })
+    } catch (_) {
+      // ignore if not present
+    }
     
-    // Start containers again
+    // Start SQL Server container (root compose includes postgres too)
     console.log('Starting Docker containers...')
-    execSync('docker-compose up -d', { 
+    execSync(`docker-compose -f "${dockerComposePath}" up -d sqlserver`, {
       cwd: dockerComposeDir,
       stdio: 'inherit'
     })
