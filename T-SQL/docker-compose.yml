@@ -1,0 +1,20 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2025-latest
+    container_name: sql-event-store
+    hostname: sqlserver
+    ports:
+      - "1433:1433"
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "EventStore!2025"
+      MSSQL_PID: "Developer"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+      - ../tsql-event-store.ddl:/init/tsql-event-store.ddl:ro
+      - ./init-db.sh:/init/init-db.sh:ro
+    entrypoint: /bin/bash /init/init-db.sh
+
+volumes:
+  sqlserver_data:
+    driver: local

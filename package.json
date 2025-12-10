@@ -27,6 +27,7 @@
   "homepage": "https://github.com/mattbishop/sql-event-store#readme",
   "dependencies": {
     "@electric-sql/pglite": "0.3.1",
+    "mssql": "^11.0.1",
     "nanoid": "5.1.5",
     "sql.js": "1.13.0"
   }
