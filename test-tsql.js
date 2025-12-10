@@ -7,55 +7,6 @@ import sql from 'mssql'
 import { nanoid } from 'nanoid'
 
 
-/**
- * T-SQL Event Store Test Suite
- * 
- * This test suite exercises the T-SQL database schema with incorrect data, 
- * duplicate data, and other likely real-world problems.
- * 
- * T-SQL-SPECIFIC DIFFERENCES FROM POSTGRESQL/SQLITE:
- * 
- * 1. APPEND MECHANISM:
- *    - PostgreSQL: Uses function append_event() that returns UUID
- *    - SQLite: Uses view append_event with INSTEAD OF INSERT trigger
- *    - T-SQL: Uses stored procedure append_event (returns @event_id via OUTPUT)
- *    → Reason: T-SQL functions cannot be used like PostgreSQL's RETURNING pattern; stored procedure is cleaner than view+trigger
- * 
- * 2. DATABASE PERSISTENCE:
- *    - PostgreSQL/SQLite: In-memory databases (fresh for each test run)
- *    - T-SQL: Persistent SQL Server database
- *    → Reason: SQL Server requires a running server instance
- *    → Solution: TRUNCATE TABLE after DDL load to ensure clean state
- * 
- * 3. PARAMETERIZED QUERIES:
- *    - PostgreSQL: Uses template strings with query``
- *    - SQLite: Uses prepared statements with placeholders
- *    - T-SQL: Uses mssql parameterized queries with .input()
- *    → Reason: mssql library requires explicit parameter binding for security
- * 
- * 4. UUID TYPE:
- *    - PostgreSQL: UUID type
- *    - SQLite: TEXT with CHECK constraint
- *    - T-SQL: UNIQUEIDENTIFIER type
- *    → Reason: T-SQL native type for GUIDs/UUIDs
- * 
- * 5. ERROR MESSAGE FORMATS:
- *    - PostgreSQL: "error: message"
- *    - SQLite: "message"
- *    - T-SQL: Direct SQL Server error messages (different format)
- *    → Reason: SQL Server throws native errors, not custom formatted
- * 
- * 6. REPLAY VIEWS:
- *    - PostgreSQL/SQLite: ORDER BY in view definition
- *    - T-SQL: ORDER BY must be in query (views can't have ORDER BY)
- *    → Reason: T-SQL view limitations
- * 
- * 7. REPLAY FUNCTION:
- *    - PostgreSQL: RETURNS SETOF replay_events (uses view)
- *    - T-SQL: RETURNS TABLE (inline definition)
- *    → Reason: T-SQL table-valued functions use inline table definition
- */
-
 const thingEntity = 'thing'
 const thingCreatedEvent = 'thing-created'
 const thingDeletedEvent = 'thing-deleted'
@@ -74,8 +25,6 @@ let thingEventId2
 let pingEventHomeId
 let pingEventWorkId
 
-// T-SQL: Connection to persistent SQL Server instance
-// Unlike PostgreSQL/SQLite which use in-memory databases, T-SQL requires a running server
 const config = {
   server: 'localhost',
   port: 1433,
@@ -94,41 +43,31 @@ const config = {
   }
 }
 
-/**
- * Restarts the Docker container to ensure a clean state.
- * T-SQL-SPECIFIC: Required because we use Docker with persistent volumes.
- * This ensures the database is completely reinitialized when DDL changes.
- */
 async function restartDockerContainer() {
   const dockerComposePath = join(process.cwd(), 'docker-compose.yml')
   const dockerComposeDir = process.cwd()
   
   try {
-    // Stop and remove containers and volumes
     console.log('Stopping Docker containers and removing volumes...')
     execSync(`docker-compose -f "${dockerComposePath}" down -v`, {
       cwd: dockerComposeDir,
       stdio: 'inherit'
     })
-    // Ensure old sqlserver container with fixed name is removed (avoid name conflict)
     try {
       execSync('docker rm -f sql-event-store', { stdio: 'ignore' })
     } catch (_) {
       // ignore if not present
     }
     
-    // Start SQL Server container (root compose includes postgres too)
     console.log('Starting Docker containers...')
     execSync(`docker-compose -f "${dockerComposePath}" up -d sqlserver`, {
       cwd: dockerComposeDir,
       stdio: 'inherit'
     })
     
-    // Wait for SQL Server to be ready
     console.log('Waiting for SQL Server to be ready...')
     await new Promise(resolve => setTimeout(resolve, 10000)) // Wait 10 seconds
     
-    // Try to connect with retries
     let retries = 30
     while (retries > 0) {
       try {
@@ -151,31 +90,18 @@ async function restartDockerContainer() {
 }
 
 async function initDb() {
-  // T-SQL-SPECIFIC: Restart Docker container to ensure clean state
-  // This is necessary because we use persistent volumes and need to reinitialize
-  // when DDL changes. Unlike PostgreSQL/SQLite which use fresh in-memory databases.
   await restartDockerContainer()
   
   const pool = await sql.connect(config)
-  // T-SQL-SPECIFIC: Always clean database at the start
-  // Unlike PostgreSQL/SQLite which use fresh in-memory databases each time,
-  // T-SQL uses a persistent database, so we must explicitly clean data before each test run
   await cleanDatabase(pool)
   await loadDdl(pool)
   return pool
 }
 
-/**
- * Cleans the database by removing all data from the ledger table.
- * This ensures a clean state before each test run.
- * T-SQL-SPECIFIC: Required because we use a persistent database, not in-memory.
- */
 async function cleanDatabase(pool) {
   try {
-    // Try to truncate the table if it exists
     await pool.request().query('TRUNCATE TABLE ledger')
   } catch (err) {
-    // Table might not exist yet (first run), ignore this error
     if (!err.message.includes('Invalid object name') && 
         !err.message.includes('does not exist')) {
       throw err
@@ -185,9 +111,6 @@ async function cleanDatabase(pool) {
 
 async function loadDdl(pool) {
   const createScript = fs.readFileSync('./tsql-event-store.ddl', 'utf8')
-  // T-SQL: Split by GO statements (batch separator) and execute each batch
-  // Unlike PostgreSQL/SQLite which execute entire script at once
-  // Split on GO at start of line or after whitespace, followed by optional whitespace and newline
   const batches = createScript.split(/^\s*GO\s*$/gim).filter(b => b.trim().length > 0)
   
   for (const batch of batches) {
@@ -196,8 +119,6 @@ async function loadDdl(pool) {
       try {
         await pool.request().query(trimmed)
       } catch (err) {
-        // Ignore errors for objects that already exist or don't exist (for re-running tests)
-        // T-SQL: DDL includes DROP statements, so this handles edge cases
         const errorMsg = err.message || ''
         if (!errorMsg.includes('already exists') && 
             !errorMsg.includes('already an object') &&
@@ -214,8 +135,6 @@ async function loadDdl(pool) {
     }
   }
   
-  // T-SQL-SPECIFIC: Clean up again after DDL load to ensure clean state
-  // This handles the case where DDL was already loaded but data exists
   await cleanDatabase(pool)
 }
 
@@ -254,7 +173,6 @@ test('T-SQL', async (ctx) => {
     const data = '{}'
 
     await t.test('cannot insert empty columns', async () => {
-      // Stored procedure append_event validates via NOT NULL constraints (propagated from table)
       await rejects(
         async () => {
           const request = pool.request()
@@ -327,7 +245,6 @@ test('T-SQL', async (ctx) => {
     })
 
     await t.test('cannot insert directly into ledger', async () => {
-      // Direct INSERT must be blocked by no_direct_insert_ledger trigger
       await rejects(
         async () => {
           await pool.request().query(`
@@ -340,7 +257,6 @@ test('T-SQL', async (ctx) => {
     })
 
     await t.test('UUIDs format for IDs', async () => {
-      // T-SQL: UNIQUEIDENTIFIER type validation
       await rejects(
         async () => {
           const request = pool.request()
@@ -532,9 +448,6 @@ test('T-SQL', async (ctx) => {
 
   await ctx.test('cannot delete or update', async (t) => {
     await t.test('cannot delete or update events', async () => {
-      // T-SQL: INSTEAD OF DELETE/UPDATE triggers throw errors
-      // Unlike PostgreSQL RULES (silent ignore) or SQLite BEFORE triggers
-      // T-SQL uses THROW for explicit error messages
       await rejects(
         async () => {
           await pool.request().query(`DELETE FROM ledger WHERE entity = '${thingEntity}'`)
@@ -553,8 +466,7 @@ test('T-SQL', async (ctx) => {
   })
 
   await ctx.test('replay events', async (t) => {
-    // T-SQL: replay_events view doesn't have ORDER BY (view limitation)
-    // ORDER BY must be added in queries, but for filtering tests it's not needed
+    // replay_events view: ORDER BY must be in the query
     await t.test('replay entity events', async () => {
       const result = await pool.request()
         .input('entity', sql.NVarChar, thingEntity)
@@ -571,10 +483,6 @@ test('T-SQL', async (ctx) => {
     })
 
     await t.test('replay events after a specific event', async () => {
-      // T-SQL: Table-valued function fn_replay_events_after()
-      // Unlike PostgreSQL: replay_events_after() RETURNS SETOF replay_events
-      // T-SQL uses RETURNS TABLE with inline definition
-      // ORDER BY must be in the query, not in the function (T-SQL limitation)
       const result = await pool.request()
         .input('after_event_id', sql.UniqueIdentifier, thingEventId1)
         .input('entity', sql.NVarChar, thingEntity)
@@ -584,9 +492,6 @@ test('T-SQL', async (ctx) => {
     })
 
     await t.test('replay events after a specific event, filtered by entity', async () => {
-      // T-SQL: Can apply WHERE clause to table-valued function result
-      // Same behavior as PostgreSQL, different syntax
-      // ORDER BY must be in the query, not in the function (T-SQL limitation)
       const result = await pool.request()
         .input('after_event_id', sql.UniqueIdentifier, thingEventId1)
         .input('entity', sql.NVarChar, thingEntity)
