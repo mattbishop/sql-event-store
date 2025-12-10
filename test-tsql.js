@@ -18,8 +18,8 @@ import { nanoid } from 'nanoid'
  * 1. APPEND MECHANISM:
  *    - PostgreSQL: Uses function append_event() that returns UUID
  *    - SQLite: Uses view append_event with INSTEAD OF INSERT trigger
- *    - T-SQL: Uses view append_event with INSTEAD OF INSERT trigger (like SQLite)
- *    → Reason: T-SQL doesn't support functions returning values in INSERT context like PostgreSQL
+ *    - T-SQL: Uses stored procedure append_event (returns @event_id via OUTPUT)
+ *    → Reason: T-SQL functions cannot be used like PostgreSQL's RETURNING pattern; stored procedure is cleaner than view+trigger
  * 
  * 2. DATABASE PERSISTENCE:
  *    - PostgreSQL/SQLite: In-memory databases (fresh for each test run)
@@ -248,9 +248,7 @@ test('T-SQL', async (ctx) => {
     const data = '{}'
 
     await t.test('cannot insert empty columns', async () => {
-      // T-SQL: Uses parameterized queries with .input() for type safety
-      // Unlike PostgreSQL template strings or SQLite prepared statements
-      // SQL Server error format: "Cannot insert the value NULL into column 'X'"
+      // Stored procedure append_event validates via NOT NULL constraints (propagated from table)
       await rejects(
         async () => {
           const request = pool.request()
@@ -259,10 +257,8 @@ test('T-SQL', async (ctx) => {
           request.input('event', sql.NVarChar, 'test-event')
           request.input('data', sql.NVarChar, data)
           request.input('append_key', sql.NVarChar, appendKey1)
-          await request.query(`
-            INSERT INTO append_event (entity, entity_key, event, data, append_key)
-            VALUES (@entity, @entity_key, @event, @data, @append_key)
-          `)
+          request.output('event_id', sql.UniqueIdentifier)
+          await request.execute('append_event')
         },
         /Cannot insert the value NULL into column 'entity'/,
         'cannot insert null entity')
@@ -275,10 +271,8 @@ test('T-SQL', async (ctx) => {
           request.input('event', sql.NVarChar, 'test-event')
           request.input('data', sql.NVarChar, data)
           request.input('append_key', sql.NVarChar, appendKey1)
-          await request.query(`
-            INSERT INTO append_event (entity, entity_key, event, data, append_key)
-            VALUES (@entity, @entity_key, @event, @data, @append_key)
-          `)
+          request.output('event_id', sql.UniqueIdentifier)
+          await request.execute('append_event')
         },
         /Cannot insert the value NULL into column 'entity_key'/,
         'cannot insert null entity key')
@@ -291,10 +285,8 @@ test('T-SQL', async (ctx) => {
           request.input('event', sql.NVarChar, null)
           request.input('data', sql.NVarChar, data)
           request.input('append_key', sql.NVarChar, appendKey1)
-          await request.query(`
-            INSERT INTO append_event (entity, entity_key, event, data, append_key)
-            VALUES (@entity, @entity_key, @event, @data, @append_key)
-          `)
+          request.output('event_id', sql.UniqueIdentifier)
+          await request.execute('append_event')
         },
         /Cannot insert the value NULL into column 'event'/,
         'cannot insert null event')
@@ -307,10 +299,8 @@ test('T-SQL', async (ctx) => {
           request.input('event', sql.NVarChar, 'test-event')
           request.input('data', sql.NVarChar, null)
           request.input('append_key', sql.NVarChar, appendKey1)
-          await request.query(`
-            INSERT INTO append_event (entity, entity_key, event, data, append_key)
-            VALUES (@entity, @entity_key, @event, @data, @append_key)
-          `)
+          request.output('event_id', sql.UniqueIdentifier)
+          await request.execute('append_event')
         },
         /Cannot insert the value NULL into column 'data'/,
         'cannot insert null event data')
@@ -323,139 +313,91 @@ test('T-SQL', async (ctx) => {
           request.input('event', sql.NVarChar, 'test-event')
           request.input('data', sql.NVarChar, data)
           request.input('append_key', sql.NVarChar, null)
-          await request.query(`
-            INSERT INTO append_event (entity, entity_key, event, data, append_key)
-            VALUES (@entity, @entity_key, @event, @data, @append_key)
-          `)
+          request.output('event_id', sql.UniqueIdentifier)
+          await request.execute('append_event')
         },
         /Cannot insert the value NULL into column 'append_key'/,
         'cannot insert null append_key')
     })
 
-    await t.test('cannot insert event_id', async () => {
-      // T-SQL: Test inserts directly into ledger table (bypassing view)
-      // The no_direct_insert_ledger trigger prevents all direct inserts with event_id set.
-      // All inserts MUST go through append_event view to ensure proper validation.
-      await rejects(
-        async () => {
-          await pool.request().query(`
-            INSERT INTO ledger (entity, entity_key, event, data, append_key, event_id)
-            VALUES ('${thingEntity}', '${thingKey}', 'test-event', '{}', '${nanoid()}', NEWID())
-          `)
-        },
-        /event_id must not be directly set/,
-        'cannot insert directly into ledger table with event_id set')
-    })
-
     await t.test('UUIDs format for IDs', async () => {
       // T-SQL: UNIQUEIDENTIFIER type validation
-      // Unlike PostgreSQL which has explicit UUID type or SQLite with CHECK constraints,
-      // T-SQL UNIQUEIDENTIFIER throws conversion errors for invalid formats
       await rejects(
         async () => {
-          await pool.request().query(`
-            INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id)
-            VALUES ('${thingEntity}', '${thingKey}', '${thingCreatedEvent}', '{}', '${appendKey1}', 'not-a-uuid')
-          `)
+          const request = pool.request()
+          request.input('entity', sql.NVarChar, thingEntity)
+          request.input('entity_key', sql.NVarChar, thingKey)
+          request.input('event', sql.NVarChar, thingCreatedEvent)
+          request.input('data', sql.NVarChar, '{}')
+          request.input('append_key', sql.NVarChar, appendKey1)
+          request.input('previous_id', sql.NVarChar, 'not-a-uuid') // force conversion error
+          request.output('event_id', sql.UniqueIdentifier)
+          await request.execute('append_event')
         },
-        /Conversion failed when converting from a character string to uniqueidentifier|Invalid column name/,
+        /Conversion failed.*uniqueidentifier|Error converting data type.*uniqueidentifier/,
         'previous_id must be a UUID')
     })
 
     await t.test('insert events for an entity', async () => {
-      // T-SQL: Insert into append_event view (like SQLite, not PostgreSQL function)
-      // Must query back to get event_id (no RETURNING clause support in INSTEAD OF triggers)
-      // T-SQL: Use sql.UniqueIdentifier type for UNIQUEIDENTIFIER parameters
+      // Stored procedure append_event returns event_id via OUTPUT
       await doesNotReject(async () => {
-        await pool.request()
+        const result = await pool.request()
           .input('entity', sql.NVarChar, thingEntity)
           .input('entity_key', sql.NVarChar, thingKey)
           .input('event', sql.NVarChar, thingCreatedEvent)
           .input('data', sql.NVarChar, data)
           .input('append_key', sql.NVarChar, appendKey1)
           .input('previous_id', sql.UniqueIdentifier, null)
-          .query(`
-            INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id)
-            VALUES (@entity, @entity_key, @event, @data, @append_key, @previous_id)
-          `)
-        
-        // T-SQL: Must SELECT event_id separately (no RETURNING in INSTEAD OF triggers)
-        // Unlike PostgreSQL function which returns UUID directly
-        const result = await pool.request()
-          .input('append_key', sql.NVarChar, appendKey1)
-          .query(`SELECT event_id FROM ledger WHERE append_key = @append_key`)
-        
-        // T-SQL: UNIQUEIDENTIFIER must be converted to string for comparison
-        thingEventId1 = result.recordset[0].event_id.toString()
+          .output('event_id', sql.UniqueIdentifier)
+          .execute('append_event')
+        thingEventId1 = result.output.event_id.toString()
         strictEqual(typeof thingEventId1, 'string', 'event_id should be a string (GUID)')
       })
 
       await doesNotReject(async () => {
-        await pool.request()
+        const result = await pool.request()
           .input('entity', sql.NVarChar, thingEntity)
           .input('entity_key', sql.NVarChar, thingKey)
           .input('event', sql.NVarChar, thingDeletedEvent)
           .input('data', sql.NVarChar, data)
           .input('append_key', sql.NVarChar, appendKey2)
           .input('previous_id', sql.UniqueIdentifier, thingEventId1)
-          .query(`
-            INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id)
-            VALUES (@entity, @entity_key, @event, @data, @append_key, @previous_id)
-          `)
-        
-        const result = await pool.request()
-          .input('append_key', sql.NVarChar, appendKey2)
-          .query(`SELECT event_id FROM ledger WHERE append_key = @append_key`)
-        
-        thingEventId2 = result.recordset[0].event_id.toString()
+          .output('event_id', sql.UniqueIdentifier)
+          .execute('append_event')
+        thingEventId2 = result.output.event_id.toString()
       })
 
       await doesNotReject(async () => {
         const pingHomeKey = nanoid()
-        await pool.request()
+        const result = await pool.request()
           .input('entity', sql.NVarChar, tableTennisEntity)
           .input('entity_key', sql.NVarChar, homeTableKey)
           .input('event', sql.NVarChar, pingEvent)
           .input('data', sql.NVarChar, data)
           .input('append_key', sql.NVarChar, pingHomeKey)
           .input('previous_id', sql.UniqueIdentifier, null)
-          .query(`
-            INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id)
-            VALUES (@entity, @entity_key, @event, @data, @append_key, @previous_id)
-          `)
-        
-        const result = await pool.request()
-          .input('append_key', sql.NVarChar, pingHomeKey)
-          .query(`SELECT event_id FROM ledger WHERE append_key = @append_key`)
-        
-        pingEventHomeId = result.recordset[0].event_id.toString()
+          .output('event_id', sql.UniqueIdentifier)
+          .execute('append_event')
+        pingEventHomeId = result.output.event_id.toString()
       })
 
       await doesNotReject(async () => {
         const pingWorkKey = nanoid()
-        await pool.request()
+        const result = await pool.request()
           .input('entity', sql.NVarChar, tableTennisEntity)
           .input('entity_key', sql.NVarChar, workTableKey)
           .input('event', sql.NVarChar, pingEvent)
           .input('data', sql.NVarChar, data)
           .input('append_key', sql.NVarChar, pingWorkKey)
           .input('previous_id', sql.UniqueIdentifier, null)
-          .query(`
-            INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id)
-            VALUES (@entity, @entity_key, @event, @data, @append_key, @previous_id)
-          `)
-        
-        const result = await pool.request()
-          .input('append_key', sql.NVarChar, pingWorkKey)
-          .query(`SELECT event_id FROM ledger WHERE append_key = @append_key`)
-        
-        pingEventWorkId = result.recordset[0].event_id.toString()
+          .output('event_id', sql.UniqueIdentifier)
+          .execute('append_event')
+        pingEventWorkId = result.output.event_id.toString()
       })
     })
 
     await t.test('previous_id rules', async () => {
-      // T-SQL: Error messages from THROW statements in trigger
-      // Format matches PostgreSQL/SQLite for consistency
+      // T-SQL: Error messages from THROW statements in stored procedure
       await rejects(
         async () => {
           const request = pool.request()
@@ -465,10 +407,8 @@ test('T-SQL', async (ctx) => {
           request.input('data', sql.NVarChar, data)
           request.input('append_key', sql.NVarChar, nanoid())
           request.input('previous_id', sql.UniqueIdentifier, null)
-          await request.query(`
-            INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id)
-            VALUES (@entity, @entity_key, @event, @data, @append_key, @previous_id)
-          `)
+          request.output('event_id', sql.UniqueIdentifier)
+          await request.execute('append_event')
         },
         /previous_id can only be null for first entity event/,
         'cannot insert multiple null previous_id for an entity')
@@ -482,10 +422,8 @@ test('T-SQL', async (ctx) => {
           request.input('data', sql.NVarChar, data)
           request.input('append_key', sql.NVarChar, nanoid())
           request.input('previous_id', sql.UniqueIdentifier, pingEventHomeId)
-          await request.query(`
-            INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id)
-            VALUES (@entity, @entity_key, @event, @data, @append_key, @previous_id)
-          `)
+          request.output('event_id', sql.UniqueIdentifier)
+          await request.execute('append_event')
         },
         /previous_id must be in the same entity/,
         'previous_id must be in same entity')
@@ -499,10 +437,8 @@ test('T-SQL', async (ctx) => {
           request.input('data', sql.NVarChar, data)
           request.input('append_key', sql.NVarChar, nanoid())
           request.input('previous_id', sql.UniqueIdentifier, thingEventId1)
-          await request.query(`
-            INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id)
-            VALUES (@entity, @entity_key, @event, @data, @append_key, @previous_id)
-          `)
+          request.output('event_id', sql.UniqueIdentifier)
+          await request.execute('append_event')
         },
         /previous_id must reference the newest event in entity/,
         'previous ID must be newest event in entity')
@@ -510,7 +446,6 @@ test('T-SQL', async (ctx) => {
 
     await t.test('Cannot insert duplicates', async () => {
       // T-SQL: UNIQUE constraint error format
-      // SQL Server format: "Violation of UNIQUE KEY constraint 'constraint_name'"
       await rejects(
         async () => {
           const request = pool.request()
@@ -520,10 +455,8 @@ test('T-SQL', async (ctx) => {
           request.input('data', sql.NVarChar, data)
           request.input('append_key', sql.NVarChar, appendKey1)
           request.input('previous_id', sql.UniqueIdentifier, thingEventId2)
-          await request.query(`
-            INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id)
-            VALUES (@entity, @entity_key, @event, @data, @append_key, @previous_id)
-          `)
+          request.output('event_id', sql.UniqueIdentifier)
+          await request.execute('append_event')
         },
         /Violation of UNIQUE KEY constraint/,
         'cannot insert different event for same append_key')
@@ -537,10 +470,8 @@ test('T-SQL', async (ctx) => {
           request.input('data', sql.NVarChar, data)
           request.input('append_key', sql.NVarChar, nanoid())
           request.input('previous_id', sql.UniqueIdentifier, thingEventId1)
-          await request.query(`
-            INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id)
-            VALUES (@entity, @entity_key, @event, @data, @append_key, @previous_id)
-          `)
+          request.output('event_id', sql.UniqueIdentifier)
+          await request.execute('append_event')
         },
         /previous_id must reference the newest event in entity/,
         'cannot insert different event for same previous')

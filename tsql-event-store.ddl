@@ -61,144 +61,79 @@ BEGIN
 END;
 GO
 
--- Immutable ledger: enforce validation on all INSERT operations
--- 
--- This trigger intercepts ALL inserts (direct and via view). Technically, direct inserts to ledger
--- without event_id would work (trigger validates and generates event_id), but the append_event view
--- is provided for API design: it hides internal columns (event_id, timestamp, sequence) and provides
--- a clean, consistent API matching PostgreSQL/SQLite. This trigger blocks direct inserts WITH event_id
--- and validates previous_id rules, generates event_id, and performs the insert.
-CREATE TRIGGER no_direct_insert_ledger ON ledger
-INSTEAD OF INSERT
+-- Append events via stored procedure (preferred API)
+-- Provides a single entry point that validates previous_id rules and returns event_id.
+CREATE OR ALTER PROCEDURE append_event
+    @entity       NVARCHAR(255),
+    @entity_key   NVARCHAR(255),
+    @event        NVARCHAR(255),
+    @data         JSON,
+    @append_key   NVARCHAR(255),
+    @previous_id  UNIQUEIDENTIFIER = NULL,
+    @timestamp    DATETIMEOFFSET   = NULL,
+    @event_id     UNIQUEIDENTIFIER OUTPUT
 AS
 BEGIN
     SET NOCOUNT ON;
-    
-    -- Block direct inserts that try to set event_id (append_event view inserts WITHOUT event_id)
-    IF EXISTS (SELECT 1 FROM inserted WHERE event_id IS NOT NULL)
+
+    -- Validation 1: previous_id IS NULL only for first event of an entity instance
+    IF (@previous_id IS NULL)
     BEGIN
-        THROW 50003, 'event_id must not be directly set. Use append_event view to insert events.', 1;
-    END;
-    
-    -- Validation 1: previous_id IS NULL only for first event
-    IF EXISTS (
-        SELECT 1 
-        FROM inserted i
-        WHERE i.previous_id IS NULL
-          AND EXISTS (
-              SELECT 1 
-              FROM ledger l
-              WHERE l.entity = i.entity
-                AND l.entity_key = i.entity_key
-          )
-    )
-    BEGIN
-        THROW 50005, 'previous_id can only be null for first entity event', 1;
-    END;
-    
-    -- Validation 2 & 3: previous_id rules (only when NOT NULL)
-    IF EXISTS (
-        SELECT 1
-        FROM inserted i
-        WHERE i.previous_id IS NOT NULL
-          AND (
-              -- Rule 2: previous_id must be in same entity
-              NOT EXISTS (
-                  SELECT 1
-                  FROM ledger l
-                  WHERE l.event_id = i.previous_id
-                    AND l.entity = i.entity
-                    AND l.entity_key = i.entity_key
-              )
-              OR
-              -- Rule 3: previous_id must reference newest event
-              EXISTS (
-                  SELECT 1
-                  FROM ledger l1
-                  WHERE l1.event_id = i.previous_id
-                    AND l1.sequence < (
-                        SELECT MAX(l2.sequence)
-                        FROM ledger l2
-                        WHERE l2.entity = i.entity
-                          AND l2.entity_key = i.entity_key
-                    )
-              )
-          )
-    )
-    BEGIN
-        -- Rule 2 error
         IF EXISTS (
             SELECT 1
-            FROM inserted i
-            WHERE i.previous_id IS NOT NULL
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM ledger l
-                  WHERE l.event_id = i.previous_id
-                    AND l.entity = i.entity
-                    AND l.entity_key = i.entity_key
-              )
+            FROM ledger l
+            WHERE l.entity = @entity
+              AND l.entity_key = @entity_key
+        )
+        BEGIN
+            THROW 50005, 'previous_id can only be null for first entity event', 1;
+        END;
+    END
+    ELSE
+    BEGIN
+        -- Validation 2: previous_id must be in same entity
+        IF NOT EXISTS (
+            SELECT 1
+            FROM ledger l
+            WHERE l.event_id   = @previous_id
+              AND l.entity     = @entity
+              AND l.entity_key = @entity_key
         )
         BEGIN
             THROW 50006, 'previous_id must be in the same entity', 1;
         END;
-        
-        -- Rule 3 error
-        THROW 50007, 'previous_id must reference the newest event in entity', 1;
+
+        -- Validation 3: previous_id must reference newest event
+        IF EXISTS (
+            SELECT 1
+            FROM ledger l1
+            WHERE l1.event_id = @previous_id
+              AND l1.sequence < (
+                  SELECT MAX(l2.sequence)
+                  FROM ledger l2
+                  WHERE l2.entity     = @entity
+                    AND l2.entity_key = @entity_key
+              )
+        )
+        BEGIN
+            THROW 50007, 'previous_id must reference the newest event in entity', 1;
+        END;
     END;
-    
-    -- All validations passed - perform insert
+
+    -- Generate event_id and insert
+    SET @event_id = NEWID();
+
     INSERT INTO ledger (entity, entity_key, event, data, append_key, previous_id, event_id, timestamp)
-    SELECT 
-        entity, 
-        entity_key, 
-        event, 
-        data, 
-        append_key, 
-        previous_id,
-        NEWID() AS event_id,  -- Always generate (view doesn't provide it)
-        ISNULL(timestamp, SYSDATETIMEOFFSET()) AS timestamp
-    FROM inserted;
-END;
-GO
-
--- View for appending events (public API)
--- 
--- T-SQL uses "INSTEAD OF INSERT" triggers on views (writable views). This view hides internal
--- columns (event_id, timestamp, sequence) and provides a clean API. When apps do INSERT INTO
--- append_event (...), the view trigger forwards to ledger WITHOUT event_id, then the ledger trigger
--- validates and generates event_id. Technically, direct inserts to ledger (without event_id) would
--- also work, but this view ensures API consistency with PostgreSQL/SQLite and a cleaner interface.
-CREATE VIEW append_event AS
-SELECT
-    entity,
-    entity_key,
-    event,
-    data,
-    append_key,
-    previous_id
-FROM ledger;
-GO
-
--- Trigger on append_event view: forwards inserts to ledger (without event_id).
--- All validation happens in the ledger trigger.
-CREATE TRIGGER generate_event_id_on_append ON append_event
-INSTEAD OF INSERT
-AS
-BEGIN
-    SET NOCOUNT ON;
-    
-    -- Forward insert to ledger table (without event_id)
-    -- The ledger trigger will validate and generate event_id
-    INSERT INTO ledger (entity, entity_key, event, data, append_key, previous_id)
-    SELECT 
-        entity, 
-        entity_key, 
-        event, 
-        data, 
-        append_key, 
-        previous_id
-    FROM inserted;
+    VALUES (
+        @entity,
+        @entity_key,
+        @event,
+        @data,
+        @append_key,
+        @previous_id,
+        @event_id,
+        ISNULL(@timestamp, SYSDATETIMEOFFSET())
+    );
 END;
 GO
 
