@@ -178,8 +178,6 @@ BEGIN
 END;
 GO
 
--- Simple view for replaying events (no ORDER BY - client must add it)
--- Performance: Better than Multi-Statement TVF (uses table statistics, not table variables)
 CREATE OR ALTER VIEW replay_events AS
 SELECT
     entity,
@@ -195,9 +193,6 @@ FROM ledger;
 GO
 
 
--- Inline Table-Valued Function for replaying events after a specific event
--- Performance: Better than Multi-Statement TVF (inline, uses table statistics)
--- Note: ORDER BY must be in calling query, not here
 CREATE OR ALTER FUNCTION replay_events_after(@after_event_id UNIQUEIDENTIFIER)
 RETURNS TABLE
 AS
