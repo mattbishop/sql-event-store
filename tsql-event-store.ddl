@@ -39,8 +39,9 @@ CREATE UNIQUE INDEX uq_first_event_per_stream
 GO
 
 -- JSON index on all paths for efficient querying (SQL Server 2025)
-CREATE JSON INDEX idx_data ON ledger (data);
-GO
+-- Slows down a lot during writes.
+-- CREATE JSON INDEX idx_data ON ledger (data);
+-- GO
 
 -- Immutable ledger: prevent DELETE
 CREATE TRIGGER no_delete_ledger ON ledger
@@ -82,7 +83,7 @@ BEGIN
 
         BEGIN TRAN;
 
-        -- Validation 1
+        -- Validate if stream exists already, if previous_id is NULL
         IF (@previous_id IS NULL)
         BEGIN
             IF EXISTS (
@@ -97,7 +98,6 @@ BEGIN
         END
         ELSE
         BEGIN
-            -- Validation 2
             IF NOT EXISTS (
                 SELECT 1
                 FROM ledger l
@@ -109,8 +109,6 @@ BEGIN
                 THROW 50006, 'previous_id must be in the same entity', 1;
             END;
 
-            -- Validation 3: previous_id must reference the newest event
-            -- Optimized: Use EXISTS instead of MAX(sequence) for better performance
             IF EXISTS (
                 SELECT 1
                 FROM ledger prev
