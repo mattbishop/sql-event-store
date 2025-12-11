@@ -92,9 +92,9 @@ internal class Program
         swInsert.Stop();
 
         var swRead = Stopwatch.StartNew();
-        // Use replay_events() function for guaranteed ordering (no ORDER BY needed)
+        // Use replay_events view (ORDER BY must be in query for ordering)
         using (var readCmd = new SqlCommand(
-                   "SELECT COUNT(*) FROM replay_events() WHERE entity = @entity AND entity_key = @entity_key",
+                   "SELECT COUNT(*) FROM replay_events WHERE entity = @entity AND entity_key = @entity_key",
                    conn))
         {
             readCmd.Parameters.AddWithValue("@entity", entity);

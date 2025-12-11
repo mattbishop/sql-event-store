@@ -178,68 +178,31 @@ BEGIN
 END;
 GO
 
-CREATE OR ALTER FUNCTION replay_events()
-RETURNS @result TABLE
-(
-    entity          NVARCHAR(255),
-    entity_key      NVARCHAR(255),
-    event           NVARCHAR(255),
-    data            JSON,
-    append_key      NVARCHAR(255),
-    previous_id     UNIQUEIDENTIFIER,
-    event_id        UNIQUEIDENTIFIER,
-    timestamp       DATETIMEOFFSET,
-    sequence        BIGINT
-)
-AS
-BEGIN
-    INSERT INTO @result
-    SELECT
-        entity,
-        entity_key,
-        event,
-        data,
-        append_key,
-        previous_id,
-        event_id,
-        timestamp,
-        sequence
-    FROM ledger
-    ORDER BY sequence;
-    
-    RETURN;
-END;
+-- Simple view for replaying events (no ORDER BY - client must add it)
+-- Performance: Better than Multi-Statement TVF (uses table statistics, not table variables)
+CREATE OR ALTER VIEW replay_events AS
+SELECT
+    entity,
+    entity_key,
+    event,
+    data,
+    append_key,
+    previous_id,
+    event_id,
+    timestamp,
+    sequence
+FROM ledger;
 GO
 
 
+-- Inline Table-Valued Function for replaying events after a specific event
+-- Performance: Better than Multi-Statement TVF (inline, uses table statistics)
+-- Note: ORDER BY must be in calling query, not here
 CREATE OR ALTER FUNCTION replay_events_after(@after_event_id UNIQUEIDENTIFIER)
-RETURNS @result TABLE
-(
-    entity          NVARCHAR(255),
-    entity_key      NVARCHAR(255),
-    event           NVARCHAR(255),
-    data            JSON,
-    append_key      NVARCHAR(255),
-    previous_id     UNIQUEIDENTIFIER,
-    event_id        UNIQUEIDENTIFIER,
-    timestamp       DATETIMEOFFSET,
-    sequence        BIGINT
-)
+RETURNS TABLE
 AS
-BEGIN
-    DECLARE @after_sequence BIGINT;
-    
-    -- Get the sequence number of the specified event_id
-    SELECT @after_sequence = sequence
-    FROM ledger
-    WHERE event_id = @after_event_id;
-    
-    -- If event_id doesn't exist, return empty result (or could throw error)
-    IF @after_sequence IS NULL
-        RETURN;
-    
-    -- Return all events with a higher sequence number, ordered by sequence
-    INSERT INTO @result
+RETURN
+(
     SELECT 
         entity,
         entity_key,
@@ -251,9 +214,10 @@ BEGIN
         timestamp,
         sequence
     FROM ledger
-    WHERE sequence > @after_sequence
-    ORDER BY sequence;
-    
-    RETURN;
-END;
+    WHERE sequence > (
+        SELECT sequence 
+        FROM ledger 
+        WHERE event_id = @after_event_id
+    )
+);
 GO
