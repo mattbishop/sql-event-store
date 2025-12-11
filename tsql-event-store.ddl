@@ -109,16 +109,18 @@ BEGIN
                 THROW 50006, 'previous_id must be in the same entity', 1;
             END;
 
-            -- Validation 3
+            -- Validation 3: previous_id must reference the newest event
+            -- Optimized: Use EXISTS instead of MAX(sequence) for better performance
             IF EXISTS (
                 SELECT 1
-                FROM ledger l1
-                WHERE l1.event_id = @previous_id
-                  AND l1.sequence < (
-                      SELECT MAX(l2.sequence)
-                      FROM ledger l2
-                      WHERE l2.entity     = @entity
-                        AND l2.entity_key = @entity_key
+                FROM ledger prev
+                WHERE prev.event_id = @previous_id
+                  AND EXISTS (
+                      SELECT 1
+                      FROM ledger newer
+                      WHERE newer.entity     = @entity
+                        AND newer.entity_key = @entity_key
+                        AND newer.sequence > prev.sequence
                   )
             )
             BEGIN
