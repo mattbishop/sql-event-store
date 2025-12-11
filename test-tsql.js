@@ -247,8 +247,8 @@ test('T-SQL', async (ctx) => {
       await rejects(
         async () => {
           await pool.request().query(`
-            INSERT INTO ledger (entity, entity_key, event, data, append_key)
-            VALUES ('${thingEntity}', '${thingKey}', 'test-event', '{}', '${nanoid()}')
+            INSERT INTO ledger (entity, entity_key, event, data, append_key, event_id)
+            VALUES ('${thingEntity}', '${thingKey}', 'test-event', '{}', '${nanoid()}', NEWID())
           `)
         },
         /Use append_event procedure to insert events into the ledger/,

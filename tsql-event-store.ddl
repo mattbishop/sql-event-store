@@ -165,19 +165,14 @@ GO
 
 CREATE OR ALTER TRIGGER no_direct_insert_ledger
 ON ledger
-INSTEAD OF INSERT
+AFTER INSERT
 AS
 BEGIN
     SET NOCOUNT ON;
+    SET XACT_ABORT ON;
 
     IF SESSION_CONTEXT(N'allow_direct_ledger_insert') = 1
-    BEGIN
-        -- Allow only via procedure; let IDENTITY generate sequence
-        INSERT INTO ledger (entity, entity_key, event, data, append_key, previous_id, event_id, timestamp)
-        SELECT entity, entity_key, event, data, append_key, previous_id, event_id, timestamp
-        FROM inserted;
         RETURN;
-    END;
 
     THROW 50003, 'Use append_event procedure to insert events into the ledger', 1;
 END;
