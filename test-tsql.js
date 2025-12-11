@@ -140,7 +140,6 @@ async function loadDdl(pool) {
 
 async function shutdownDb(pool) {
   // Export data to JSON for inspection (similar to postgres-store.tsv and sqlite-store.db)
-  // T-SQL: Cast UNIQUEIDENTIFIER to NVARCHAR for JSON serialization
   const result = await pool.request().query(`
     SELECT 
       sequence,
@@ -274,7 +273,6 @@ test('T-SQL', async (ctx) => {
     })
 
     await t.test('insert events for an entity', async () => {
-      // Stored procedure append_event returns event_id via OUTPUT
       await doesNotReject(async () => {
         const result = await pool.request()
           .input('entity', sql.NVarChar, thingEntity)
@@ -365,7 +363,6 @@ test('T-SQL', async (ctx) => {
     })
 
     await t.test('previous_id rules', async () => {
-      // T-SQL: Error messages from THROW statements in stored procedure
       await rejects(
         async () => {
           const request = pool.request()
@@ -413,7 +410,6 @@ test('T-SQL', async (ctx) => {
     })
 
     await t.test('Cannot insert duplicates', async () => {
-      // T-SQL: UNIQUE constraint error format
       await rejects(
         async () => {
           const request = pool.request()
@@ -466,19 +462,19 @@ test('T-SQL', async (ctx) => {
   })
 
   await ctx.test('replay events', async (t) => {
-    // replay_events view: ORDER BY must be in the query
     await t.test('replay entity events', async () => {
       const result = await pool.request()
         .input('entity', sql.NVarChar, thingEntity)
-        .query(`SELECT * FROM replay_events WHERE entity = @entity`)
+        .query(`SELECT * FROM replay_events() WHERE entity = @entity`)
       strictEqual(result.recordset.length, 2, 'should have two events')
+      strictEqual(result.recordset[0].sequence < result.recordset[1].sequence, true, 'events should be ordered by sequence')
     })
 
     await t.test('replay events for a specific entity', async () => {
       const result = await pool.request()
         .input('entity', sql.NVarChar, tableTennisEntity)
         .input('entity_key', sql.NVarChar, homeTableKey)
-        .query(`SELECT * FROM replay_events WHERE entity = @entity AND entity_key = @entity_key`)
+        .query(`SELECT * FROM replay_events() WHERE entity = @entity AND entity_key = @entity_key`)
       strictEqual(result.recordset.length, 1, 'should have one event')
     })
 
@@ -487,16 +483,18 @@ test('T-SQL', async (ctx) => {
         .input('after_event_id', sql.UniqueIdentifier, thingEventId1)
         .input('entity', sql.NVarChar, thingEntity)
         .input('entity_key', sql.NVarChar, thingKey)
-        .query(`SELECT * FROM fn_replay_events_after(@after_event_id) WHERE entity = @entity AND entity_key = @entity_key ORDER BY sequence`)
+        .query(`SELECT * FROM replay_events_after(@after_event_id) WHERE entity = @entity AND entity_key = @entity_key`)
       strictEqual(result.recordset.length, 1, 'should have one event after first')
+      strictEqual(result.recordset[0].sequence > 0, true, 'sequence should be positive')
     })
 
     await t.test('replay events after a specific event, filtered by entity', async () => {
       const result = await pool.request()
         .input('after_event_id', sql.UniqueIdentifier, thingEventId1)
         .input('entity', sql.NVarChar, thingEntity)
-        .query(`SELECT * FROM fn_replay_events_after(@after_event_id) WHERE entity = @entity ORDER BY sequence`)
+        .query(`SELECT * FROM replay_events_after(@after_event_id) WHERE entity = @entity`)
       strictEqual(result.recordset.length, 1, 'should have one event')
+      strictEqual(result.recordset[0].sequence > 0, true, 'sequence should be positive')
     })
   })
 })
