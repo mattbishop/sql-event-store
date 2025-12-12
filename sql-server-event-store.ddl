@@ -68,7 +68,6 @@ CREATE OR ALTER PROCEDURE append_event
     @data         JSON,
     @append_key   NVARCHAR(255),
     @previous_id  UNIQUEIDENTIFIER = NULL,
-    @timestamp    DATETIMEOFFSET   = NULL,
     @event_id     UNIQUEIDENTIFIER OUTPUT
 AS
 BEGIN
@@ -129,7 +128,7 @@ BEGIN
         -- Insert
         SET @event_id = NEWID();
 
-        INSERT INTO ledger (entity, entity_key, event, data, append_key, previous_id, event_id, timestamp)
+        INSERT INTO ledger (entity, entity_key, event, data, append_key, previous_id, event_id)
         VALUES (
             @entity,
             @entity_key,
@@ -137,8 +136,7 @@ BEGIN
             @data,
             @append_key,
             @previous_id,
-            @event_id,
-            ISNULL(@timestamp, SYSDATETIMEOFFSET())
+            @event_id
         );
 
         COMMIT TRAN;
@@ -216,3 +214,4 @@ RETURN
     )
 );
 GO
+

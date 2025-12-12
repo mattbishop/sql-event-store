@@ -1,15 +1,15 @@
 # SQL Event Store
-Demonstration of a SQL event store with deduplication and guaranteed event ordering. The database rules are intended to prevent incorrect information from entering into an event stream. You are assumed to have familiarity with [event sourcing](https://martinfowler.com/eaaDev/EventSourcing.html). Two DDLs are provided – one for [Postgres](https://www.postgresql.org), one for [SQLite](https://sqlite.org).
+Demonstration of a SQL event store with deduplication and guaranteed event ordering. The database rules are intended to prevent incorrect information from entering into an event stream. You are assumed to have familiarity with [event sourcing](https://martinfowler.com/eaaDev/EventSourcing.html). Three DDLs are provided – one for [Postgres](https://www.postgresql.org), one for [SQLite](https://sqlite.org), and one for [SQL Server](https://www.microsoft.com/sql-server).
 
 This project uses a node test suite to ensure the DDLs comply with the design requirements. The DDLs can also be ported to most SQL RDBMS and accessed from any number of writers, including high-load serverless functions, without a coordinating “single writer” process.
 
 ### Installing
 
-Good news! Nothing to install! Instead, take the DDLs in this project ([Postgres](./postgres-event-store.ddl), [SQLite](./sqlite-event-store.ddl)) and include them in your application’s database definition set.
+Good news! Nothing to install! Instead, take the DDLs in this project ([Postgres](./postgres-event-store.ddl), [SQLite](./sqlite-event-store.ddl), [SQL Server](./sql-server-event-store.ddl)) and include them in your application's database definition set.
 
 ## Usage Model
 
-Both SQLite and Postgres versions have similar SQL usage models but with one main difference. Postgres provides functions, whereas SQLite only has views. The concepts and naming are similar between the two databases, but slightly different in their use and capabilities.
+SQLite, Postgres, and SQL Server versions have similar SQL usage models but with some differences. Postgres and SQL Server provide functions/procedures, whereas SQLite only has views. The concepts and naming are similar between the databases, but slightly different in their use and capabilities.
 
 ### Appending Events
 
@@ -43,11 +43,27 @@ SELECT append_event ('game', 'apr-7-2025', 'game started','true', 'an-append-key
 SELECT append_event ('game', 'apr-7-2025', 'game going','true', 'another-append-key', '019612a6-38ac-7108-85fd-33e8081cedaf');
 ```
 
+#### SQL Server
+
+Append new events by calling the `append_event` stored procedure. Here is an example:
+
+```sql
+-- Add an event. This procedure returns the generated event_id via an OUTPUT parameter.
+DECLARE @event_id UNIQUEIDENTIFIER;
+EXEC append_event @entity = 'game', @entity_key = 'apr-7-2025', @event = 'game started', @data = 'true', @append_key = 'an-append-key', @previous_id = NULL, @event_id = @event_id OUTPUT;
+SELECT @event_id;
+
+-- now insert another event, using the first event's id as the previous_id value
+DECLARE @event_id2 UNIQUEIDENTIFIER;
+EXEC append_event @entity = 'game', @entity_key = 'apr-7-2025', @event = 'game going', @data = 'true', @append_key = 'another-append-key', @previous_id = @event_id, @event_id = @event_id2 OUTPUT;
+SELECT @event_id2;
+```
+
 ### Replaying Events
 
 One can replay events in order, without unhelpful data, by using the `replay_events` view.
 
-#### SQLite / Postgres
+#### SQLite / Postgres / SQL Server
 
 ```sql
 -- Replay all the events
@@ -67,15 +83,22 @@ WHERE entity = 'game'
 -- BEWARE the last event_id in this result set may not be the last event for the entity instance, so it
 -- cannot be used to append an event. To find the last event for an entity, use this query:
 
+-- SQLite / Postgres
 SELECT event_id FROM ledger
 WHERE entity = 'game'
   AND entity_key = '2022 Classic'
 ORDER BY sequence DESC LIMIT 1;
+
+-- SQL Server
+SELECT TOP 1 event_id FROM ledger
+WHERE entity = 'game'
+  AND entity_key = '2022 Classic'
+ORDER BY sequence DESC;
 ```
 
 ### Catching Up With New Events
 
-Your application may want to “catch up” from a previously read event and avoid replaying already-seen events. SQLite and Postgres have different mechanisms to do so.
+Your application may want to "catch up" from a previously read event and avoid replaying already-seen events. SQLite, Postgres, and SQL Server have different mechanisms to do so.
 
 #### Catching Up With SQLite
 
@@ -93,14 +116,27 @@ The last `WHERE event_id` portion will contain the most recent event processed b
 
 #### Catching Up With Postgres
 
-Replaying events to catch up after a previous event is a bit easier with Postgres since it has stored functions. The function `replay_events_after` accepts the event ID of the most recent event processed by your application. It returns the same fields as the `replay_events` view described above.
+Replaying events to catch up after a previous event is easier with Postgres since it has stored functions. The function `replay_events_after` accepts the event ID of the most recent event processed by your application. It returns the same fields as the `replay_events` view described above. The function includes `ORDER BY` internally, so results are already ordered.
 
 ```sql
 -- Catch up on new events from a specific entity, after a specific event
--- Postgres-only
+-- Postgres
 SELECT * FROM replay_events_after('123e4567-e89b-12d3-a456-426614174000')
 WHERE entity = 'game' 
   AND entity_key = '2022 Classic';
+```
+
+#### Catching Up With SQL Server
+
+SQL Server also provides a `replay_events_after` function similar to Postgres. However, since SQL Server's inline table-valued functions cannot include `ORDER BY`, you must add it in your query to guarantee ordering.
+
+```sql
+-- Catch up on new events from a specific entity, after a specific event
+-- SQL Server (ORDER BY required)
+SELECT * FROM replay_events_after('123e4567-e89b-12d3-a456-426614174000')
+WHERE entity = 'game' 
+  AND entity_key = '2022 Classic'
+ORDER BY sequence;
 ```
 
 Notice how your application can add WHERE clauses in the replay query to filter for relevant events.
@@ -231,3 +267,15 @@ The Postgres version can be tested with the [test-postgres.js]() script. Run thi
 ```
 
 The script will dump the test ledger table to `postgres-store.tsv` for your inspection.
+
+### SQL Server Event Store
+
+The [SQL Server version](./sql-server-event-store.ddl) of SQL event store has the same behavior as the SQLite and Postgres versions. It was built and tested on SQL Server 2025 but can be used in other versions.
+
+The SQL Server version can be tested with the [test-sql-server.js](./test-sql-server.js) script. This test requires a running SQL Server instance. The test script uses Docker Compose to start a SQL Server container automatically.
+
+```bash
+> node --test test-sql-server.js
+```
+
+The script will dump the test ledger table to `sql-server-store.json` for your inspection.

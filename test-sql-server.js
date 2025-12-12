@@ -110,7 +110,7 @@ async function cleanDatabase(pool) {
 }
 
 async function loadDdl(pool) {
-  const createScript = fs.readFileSync('./tsql-event-store.ddl', 'utf8')
+  const createScript = fs.readFileSync('./sql-server-event-store.ddl', 'utf8')
   const batches = createScript.split(/^\s*GO\s*$/gim).filter(b => b.trim().length > 0)
   
   for (const batch of batches) {
@@ -155,7 +155,7 @@ async function shutdownDb(pool) {
     ORDER BY sequence
   `)
   
-  fs.writeFileSync('tsql-store.json', JSON.stringify(result.recordset, null, 2))
+  fs.writeFileSync('sql-server-store.json', JSON.stringify(result.recordset, null, 2))
   await pool.close()
 }
 
@@ -498,3 +498,4 @@ test('T-SQL', async (ctx) => {
     })
   })
 })
+

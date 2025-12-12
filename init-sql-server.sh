@@ -17,10 +17,11 @@ echo "SQL Server is ready!"
 echo "Creating database and running init scripts..."
 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -Q "CREATE DATABASE eventstore"
 # -I enables QUOTED_IDENTIFIER (required for JSON INDEX)
-/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -I -d eventstore -i /init/tsql-event-store.ddl
+/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -I -d eventstore -i /init/sql-server-event-store.ddl
 
 echo "Database initialized successfully!"
 
 # Keep container running
 wait
+
 

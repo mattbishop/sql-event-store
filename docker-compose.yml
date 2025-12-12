@@ -13,9 +13,9 @@ services:
       MSSQL_PID: "Developer"
     volumes:
       - sqlserver_data:/var/opt/mssql
-      - ./tsql-event-store.ddl:/init/tsql-event-store.ddl:ro
-      - ./init-mssql.sh:/init/init-db.sh:ro
-    entrypoint: /bin/bash /init/init-db.sh
+      - ./sql-server-event-store.ddl:/init/sql-server-event-store.ddl:ro
+      - ./init-sql-server.sh:/init/init-sql-server.sh:ro
+    entrypoint: /bin/bash /init/init-sql-server.sh
 
   postgres:
     image: postgres:16
