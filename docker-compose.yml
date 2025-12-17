@@ -1,0 +1,38 @@
+version: "3.9"
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2025-latest
+    container_name: sql-event-store
+    hostname: sqlserver
+    ports:
+      - "1433:1433"
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "EventStore!2025"
+      MSSQL_PID: "Developer"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+      - ./sql-server-event-store.ddl:/init/sql-server-event-store.ddl:ro
+      - ./init-sql-server.sh:/init/init-sql-server.sh:ro
+    entrypoint: /bin/bash /init/init-sql-server.sh
+
+  postgres:
+    image: postgres:16
+    container_name: pg-event-store
+    environment:
+      POSTGRES_DB: eventstore
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: EventStore!2025
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./postgres-event-store.ddl:/docker-entrypoint-initdb.d/postgres-event-store.sql:ro
+
+volumes:
+  sqlserver_data:
+    driver: local
+  pg_data:
+    driver: local
+
