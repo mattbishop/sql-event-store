@@ -1,7 +1,7 @@
 import { throws, doesNotThrow, strictEqual } from 'node:assert/strict'
 import { before, after, test } from 'node:test'
 import fs from 'fs'
-import initSqlJs from 'sql.js'
+import { DatabaseSync } from 'node:sqlite'
 import { nanoid } from 'nanoid'
 
 
@@ -22,34 +22,27 @@ const homeTableKey = 'home'
 const workTableKey = 'work'
 
 
-async function initDb() {
-  const SQL = await initSqlJs()
-  const db = new SQL.Database()
-  loadDdl(db)
+const sqliteFile = 'sqlite-store.db'
+
+function initDb() {
+  fs.rmSync(sqliteFile)
+  const db = new DatabaseSync(sqliteFile)
+  const createScript = fs.readFileSync('./sqlite-event-store.ddl', 'utf8')
+  db.exec(createScript)
   return db
 }
 
-function loadDdl(db) {
-  const createScript = fs.readFileSync('./sqlite-event-store.ddl', 'utf8')
-  db.run(createScript)
-}
-
-function shutdownDb(db) {
-  const data = db.export()
-  const buffer = Buffer.from(data)
-  fs.writeFileSync('sqlite-store.db', buffer)
-  db.close()
-}
-
-test('SQLite', async (ctx) => {
+test('SQLite',  (ctx) => {
 
   let db
-  before(async () => db = await initDb())
+  before( () => db = initDb())
 
-  after(() => shutdownDb(db))
+  after(() => db.close())
 
-  await ctx.test('insert events', async (t) => {
-    const stmt = db.prepare('INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id) VALUES (?, ?, ?, ?, ?, ?)')
+  ctx.test('insert events',  (t) => {
+    const stmt = db.prepare(`
+INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id)
+  VALUES (?, ?, ?, ?, ?, ?)`)
 
     const appendKey1 = nanoid()
     const appendKey2 = nanoid()
@@ -62,26 +55,26 @@ test('SQLite', async (ctx) => {
 
     const data = '{}'
 
-    await t.test('cannot insert empty columns', () => {
+    t.test('cannot insert empty columns', () => {
       throws(
-        () => stmt.run([null, thingKey, thingCreatedEvent, data, appendKey1]),
+        () => stmt.run(null, thingKey, thingCreatedEvent, data, appendKey1),
         /NOT NULL constraint failed: ledger\.entity/,
         'cannot insert null entity')
       throws(
-        () => stmt.run([thingEntity, null, thingCreatedEvent, data, appendKey1]),
+        () => stmt.run(thingEntity, null, thingCreatedEvent, data, appendKey1),
         /NOT NULL constraint failed: ledger\.entity_key/,
         'cannot insert null entity key')
       throws(
-        () => stmt.run([thingEntity, thingKey, null, data, appendKey1]),
+        () => stmt.run(thingEntity, thingKey, null, data, appendKey1),
         /NOT NULL constraint failed: ledger\.event/,
         'cannot insert null event')
       throws(
-        () => stmt.run([thingEntity, thingKey, thingCreatedEvent, null, appendKey1]),
+        () => stmt.run(thingEntity, thingKey, thingCreatedEvent, null, appendKey1),
         /NOT NULL constraint failed: ledger\.data/,
         'cannot insert null event data')
 
       throws(
-        () => stmt.run([thingEntity, thingKey, thingCreatedEvent, data, null]),
+        () => stmt.run(thingEntity, thingKey, thingCreatedEvent, data, null),
         /NOT NULL constraint failed: ledger\.append_key/,
         'cannot insert null append key')
     })
@@ -90,45 +83,46 @@ test('SQLite', async (ctx) => {
     // Need to SELECT it like this.
     const appendStmt = db.prepare(`
 INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id)
-    VALUES ($1, $2, $3, $4, $5, $6)
-    RETURNING (SELECT event_id FROM ledger WHERE append_key = $5) as event_id`)
+    VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+    RETURNING (SELECT event_id FROM ledger WHERE append_key = ?5) AS event_id`)
 
-    await t.test('insert events for an entity', () => {
-      doesNotThrow(() => [thingEventId1] = appendStmt.get([thingEntity, thingKey, thingCreatedEvent, data, appendKey1, null]))
-      doesNotThrow(() => [thingEventId2] = appendStmt.get([thingEntity, thingKey, thingDeletedEvent, data, appendKey2, thingEventId1]))
-      doesNotThrow(() => [pingEventHomeId] = appendStmt.get([tableTennisEntity, homeTableKey, pingEvent, data, nanoid(), null]))
-      doesNotThrow(() => [pingEventWorkId] = appendStmt.get([tableTennisEntity, workTableKey, pingEvent, data, nanoid(), null]))
+    const getEventId = ({event_id}) => event_id
+    t.test('insert events for an entity', () => {
+      doesNotThrow(() => thingEventId1 = getEventId(appendStmt.get(thingEntity, thingKey, thingCreatedEvent, data, appendKey1, null)))
+      doesNotThrow(() => thingEventId2 = getEventId(appendStmt.get(thingEntity, thingKey, thingDeletedEvent, data, appendKey2, thingEventId1)))
+      doesNotThrow(() => pingEventHomeId = getEventId(appendStmt.get(tableTennisEntity, homeTableKey, pingEvent, data, nanoid(), null)))
+      doesNotThrow(() => pingEventWorkId = getEventId(appendStmt.get(tableTennisEntity, workTableKey, pingEvent, data, nanoid(), null)))
     })
 
-    await t.test('previous_id rules', () => {
+    t.test('previous_id rules', () => {
       throws(
-        () => stmt.run([tableTennisEntity, homeTableKey, pingEvent, data, nanoid(), null]),
+        () => stmt.run(tableTennisEntity, homeTableKey, pingEvent, data, nanoid(), null),
         /previous_id can only be null for first entity event/,
         'cannot insert multiple null previous ID for an entity')
       throws(
-        () => stmt.run([tableTennisEntity, workTableKey, pongEvent, data, nanoid(), pingEventHomeId]),
+        () => stmt.run(tableTennisEntity, workTableKey, pongEvent, data, nanoid(), pingEventHomeId),
         /previous_id must be in same entity/,
         'previous ID must be in same entity')
       throws(
-        () => stmt.run([thingEntity, thingKey, thingCreatedEvent, data, nanoid(), thingEventId1]),
+        () => stmt.run(thingEntity, thingKey, thingCreatedEvent, data, nanoid(), thingEventId1),
         /previous_id must reference the newest event in entity/,
         'previous ID must be newest event in entity')
     })
 
-    await t.test('Cannot insert duplicates', () => {
+    t.test('Cannot insert duplicates', () => {
       throws(
-        () => stmt.run([thingEntity, thingKey, thingDeletedEvent, data, appendKey1, thingEventId2]),
+        () => stmt.run(thingEntity, thingKey, thingDeletedEvent, data, appendKey1, thingEventId2),
         /UNIQUE constraint failed: ledger\.append_key/,
         'cannot insert different event for same append key')
       throws(
-        () => stmt.run([thingEntity, thingKey, thingDeletedEvent, data, nanoid(), thingEventId1]),
+        () => stmt.run(thingEntity, thingKey, thingDeletedEvent, data, nanoid(), thingEventId1),
         /previous_id must reference the newest event in entity/,
         'cannot insert different event for same previous ID')
     })
   })
 
-  await ctx.test('cannot delete or update', async (t) => {
-    await t.test('cannot delete or update events', () => {
+  ctx.test('cannot delete or update',  (t) => {
+    t.test('cannot delete or update events', () => {
       throws(
         () => db.exec(`DELETE FROM ledger WHERE entity = '${thingEntity}'`),
         /Cannot delete events from the ledger/,
@@ -143,14 +137,16 @@ INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_
   })
 
 
-  await ctx.test('replay events', async (t) => {
-    await t.test('replay entity events', async () => {
-      const [{values}] = await db.exec(`SELECT * FROM replay_events WHERE entity = '${thingEntity}'`)
+  ctx.test('replay events',  (t) => {
+    t.test('replay entity events',  () => {
+    const stmt = db.prepare(`SELECT * FROM replay_events WHERE entity = '${thingEntity}'`)
+      const values = stmt.all()
       strictEqual(values.length, 2, 'should have two events')
     })
 
-    await t.test('replay single entity event', async () => {
-      const [{values}] = await db.exec(`SELECT * FROM replay_events WHERE entity = '${tableTennisEntity}' AND entity_key = '${homeTableKey}'`)
+    t.test('replay single entity event',  () => {
+      const stmt = db.prepare(`SELECT * FROM replay_events WHERE entity = '${tableTennisEntity}' AND entity_key = '${homeTableKey}'`)
+      const values = stmt.all()
       strictEqual(values.length, 1, 'should have one event')
     })
   })

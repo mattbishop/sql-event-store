@@ -238,7 +238,7 @@ Multiple constraints are applied to this table to ensure bad events do not make 
 
 ## Running Tests
 
-Running tests is not necessary but interesting to validate the correctness of the DDLs. One must have [Node](https://nodejs.org) installed (Node 22 is what I used) and then:
+Running tests is not necessary but interesting to validate the correctness of the DDLs. One must have [Node](https://nodejs.org) installed (Node 24 is what I use) and then:
 
 ```bash
 > npm install
