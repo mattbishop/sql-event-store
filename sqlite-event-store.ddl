@@ -20,6 +20,12 @@ CREATE TABLE ledger
 
 CREATE INDEX entity_index ON ledger (entity, entity_key);
 
+-- Unique constraint to prevent race conditions (first event per stream)
+-- Ensures only one row with previous_id IS NULL per (entity, entity_key).
+CREATE UNIQUE INDEX one_first_event_per_entity_index
+    ON ledger (entity, entity_key)
+    WHERE previous_id IS NULL;
+
 
 -- immutable ledger
 CREATE TRIGGER no_delete_ledger
