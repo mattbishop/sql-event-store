@@ -254,7 +254,7 @@ The [SQLite version](./sqlite-event-store.ddl) of SQL event store was built and 
 > node --test test-sqlite.js
 ```
 
-The SQLite test uses [sql.js](https://github.com/kripken/sql.js), the WASM build of SQLite for reliable compilation and test execution. The test will dump the test database to `sqlite-store.db` for your examination.
+The SQLite test uses node’s built-in SQLite library. The test will dump the test database to `sqlite-store.db` for your examination.
 
 ### Postgres Event Store
 
