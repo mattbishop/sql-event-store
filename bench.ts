@@ -1,8 +1,7 @@
 import sql from 'mssql'
-import {rmSync} from "node:fs"
+import { readFileSync, rmSync } from 'node:fs'
 import {DatabaseSync} from "node:sqlite"
 import { Pool as PgPool } from 'pg'
-import { readFileSync } from 'fs'
 import { randomUUID } from 'crypto'
 
 // Connection defaults (adjust if needed)
@@ -81,7 +80,7 @@ async function runSqlServer(count: number): Promise<BenchmarkResult> {
   const readResult = await pool.request()
     .input('entity', sql.NVarChar, entity)
     .input('entity_key', sql.NVarChar, entityKey)
-    .query('SELECT COUNT(*) as count FROM replay_events WHERE entity = @entity AND entity_key = @entity_key')
+    .query('SELECT COUNT(*) AS count FROM replay_events WHERE entity = @entity AND entity_key = @entity_key')
 
   const readCount = readResult.recordset[0].count
   const readMs = Math.round(performance.now() - swRead)
@@ -118,7 +117,7 @@ async function runPostgres(count: number): Promise<BenchmarkResult> {
 
   const swRead = performance.now()
   const readResult = await pool.query(
-    'SELECT COUNT(*) as count FROM replay_events WHERE entity = $1 AND entity_key = $2',
+    'SELECT COUNT(*) AS count FROM replay_events WHERE entity = $1 AND entity_key = $2',
     [entity, entityKey]
   )
   const readCount = parseInt(readResult.rows[0].count)
@@ -147,11 +146,11 @@ function runSqlite(totalCount: number): BenchmarkResult {
 
   const swInsert = performance.now()
   let previousId: string | null = null
-    const appendStmt = db.prepare(`
+  const appendStmt = db.prepare(`
       INSERT INTO append_event (entity, entity_key, event, data, append_key, previous_id)
       VALUES (?1, ?2, ?3, ?4, ?5, ?6) 
       RETURNING (SELECT event_id FROM ledger WHERE append_key = ?5) AS event_id`)
-  const countStmt = db.prepare(`SELECT COUNT(*) as count FROM replay_events WHERE entity = ? AND entity_key = ?`)
+  const countStmt = db.prepare(`SELECT COUNT(*) AS count FROM replay_events WHERE entity = ? AND entity_key = ?`)
 
   for (let i = 0; i < totalCount; i++) {
     const appendKey = randomUUID()

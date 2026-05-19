@@ -1,6 +1,6 @@
 import { throws, doesNotThrow, strictEqual } from 'node:assert/strict'
+import { readFileSync, rmSync } from 'node:fs'
 import { before, after, test } from 'node:test'
-import fs from 'fs'
 import { DatabaseSync } from 'node:sqlite'
 import { nanoid } from 'nanoid'
 
@@ -25,9 +25,9 @@ const workTableKey = 'work'
 const sqliteFile = 'sqlite-store.db'
 
 function initDb() {
-  fs.rmSync(sqliteFile)
+  rmSync(sqliteFile)
   const db = new DatabaseSync(sqliteFile)
-  const createScript = fs.readFileSync('./sqlite-event-store.ddl', 'utf8')
+  const createScript = readFileSync('./sqlite-event-store.ddl', 'utf8')
   db.exec(createScript)
   return db
 }
