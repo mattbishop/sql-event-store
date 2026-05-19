@@ -25,7 +25,7 @@ const workTableKey = 'work'
 const sqliteFile = 'sqlite-store.db'
 
 function initDb() {
-  rmSync(sqliteFile)
+  rmSync(sqliteFile, {force: true})
   const db = new DatabaseSync(sqliteFile)
   const createScript = readFileSync('./sqlite-event-store.ddl', 'utf8')
   db.exec(createScript)

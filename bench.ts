@@ -139,7 +139,7 @@ function runSqlite(totalCount: number): BenchmarkResult {
   const entityKey = newEntityKey()
 
   // Load SQLite database
-  rmSync(SQLITE_PATH)
+  rmSync(SQLITE_PATH, {force: true})
   const db = new DatabaseSync(SQLITE_PATH)
   const ddl = readFileSync('sqlite-event-store.ddl', 'utf-8')
   db.exec(ddl)
